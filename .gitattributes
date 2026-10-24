@@ -1,0 +1,12 @@
+# Fine riga corrette per ogni sistema, chiunque faccia il commit
+* text=auto
+*.sh  text eol=lf
+*.py  text eol=lf
+*.bat text eol=crlf
+
+# GeoJSON: testo, così le modifiche alla mappa si vedono nei diff
+*.geojson text
+
+*.woff2 binary
+*.png   binary
+*.webp  binary

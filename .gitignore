@@ -1,0 +1,21 @@
+# Render di uNmINeD (≈730 MB, 47k file): si distribuisce a parte come zip,
+# da estrarre nella radice del progetto senza rinominare la cartella.
+render_*/
+
+# Copie create con "Salva come…" (panera_AAAA-MM-GG_hhmm.geojson): il file ufficiale è data/panera.geojson
+data/panera_*.geojson
+
+# Python
+__pycache__/
+*.pyc
+
+# Sistema operativo
+.DS_Store
+Thumbs.db
+desktop.ini
+*~
+
+# Editor
+.vscode/
+.idea/
+.claude/

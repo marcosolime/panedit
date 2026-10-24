@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Editor di Panera</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="lib/fonts/fonts.css">
+  <link rel="stylesheet" href="lib/leaflet.css">
+  <link rel="stylesheet" href="lib/leaflet-geoman.css">
+  <link rel="stylesheet" href="css/editor.css">
+</head>
+<body>
+<div id="app">
+  <header id="topbar">
+    <div class="brand">
+      <svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><path d="M3 6l6-2 6 2 6-2v14l-6 2-6-2-6 2z"/><path d="M9 4v14M15 6v14"/></svg>
+      <b>Panera</b><span>Editor cartografico</span>
+    </div>
+    <div class="filebox" title="File corrente"><span id="fileName">—</span><i id="dirty" title="Modifiche non salvate"></i></div>
+    <div id="tbActions" class="tb-group"></div>
+    <div class="search">
+      <span id="searchIcon"></span>
+      <input id="search" type="search" placeholder="Cerca un luogo…" autocomplete="off" spellcheck="false">
+      <kbd>Ctrl K</kbd>
+      <div id="results"></div>
+    </div>
+  </header>
+
+  <nav id="rail" aria-label="Tipi di entità"></nav>
+  <div id="panelWrap"><aside id="panel"></aside></div>
+
+  <main id="mapwrap">
+    <div id="toolstrip">
+      <div id="tsTools" class="ts-tools"></div>
+      <span class="ts-sep"></span>
+      <label class="opt">Crea <select id="optTarget"></select></label>
+      <label class="opt" id="optKingdomWrap">Regno <select id="optKingdom"></select></label>
+      <label class="opt" id="optOverlapWrap" title="Cosa succede quando una nuova area invade marche o protettorati esistenti">Sovrapposizioni
+        <select id="optOverlap">
+          <option value="clip">si ferma ai confini</option>
+          <option value="steal">ruba ai vicini</option>
+          <option value="free">consentite</option>
+        </select>
+      </label>
+      <span class="ts-grow"></span>
+      <button id="optSnap" class="tg" title="Aggancia i vertici a quelli delle entità vicine"></button>
+      <button id="optLink" class="tg" title="Trascinando un vertice condiviso si spostano anche le marche confinanti"></button>
+    </div>
+    <div id="map"></div>
+    <div id="hint"></div>
+    <div id="scalebar"><div class="sb-bar"></div><div class="sb-labels"></div></div>
+    <div id="hoverChip"></div>
+    <button id="tglLeft" class="edge-tgl left" aria-controls="panel"></button>
+    <button id="tglRight" class="edge-tgl right" aria-controls="inspector"></button>
+  </main>
+
+  <div id="insWrap">
+  <aside id="inspector">
+    <div id="insContent"></div>
+    <div id="insView">
+      <label class="switch" title="(G) Mostra i confini dei chunk (16×16 blocchi); le linee più marcate delimitano le regioni (512×512)">
+        <input type="checkbox" id="optGrid"><i></i><span>Griglia dei chunk</span>
+      </label>
+    </div>
+  </aside>
+  </div>
+
+  <footer id="status">
+    <span id="stCoords">X —   Z —</span>
+    <span id="stZoom"></span>
+    <span id="stCounts"></span>
+    <span id="stDraft"></span>
+    <span class="grow"></span>
+    <select id="zones"></select>
+  </footer>
+</div>
+<div id="toasts"></div>
+<div id="dropOverlay">Rilascia il file GeoJSON per aprirlo</div>
+
+<script src="lib/leaflet.js"></script>
+<script src="lib/leaflet-geoman.js"></script>
+<script src="lib/turf.min.js"></script>
+<script src="js/icons.js"></script>
+<script src="js/geo.js"></script>
+<script src="js/model.js"></script>
+<script src="js/basemap.js"></script>
+<script src="js/render.js"></script>
+<script src="js/overlays.js"></script>
+<script src="js/tools.js"></script>
+<script src="js/io.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>
