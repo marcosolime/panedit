@@ -513,9 +513,10 @@ const UI = (() => {
       </section>`;
     }
 
-    // etichetta
+    // etichetta (il regno non ne ha una propria: compare sotto le sue marche)
     const auto = lab.size == null, size = lab.size || Math.round(Render.autoSize(f));
     const rotAuto = lab.rotation == null;
+    if (p.kind !== 'regno') {
     h += `<section><h3>Etichetta</h3>
       <label class="chk"><input type="checkbox" data-l="show"${lab.show !== false ? ' checked' : ''}> Mostra il nome sulla mappa</label>
       ${K.hasKingdom ? `<label class="chk"><input type="checkbox" data-l="showKingdom"${lab.showKingdom !== false ? ' checked' : ''}> Mostra il regno tra parentesi</label>` : ''}
@@ -535,6 +536,7 @@ const UI = (() => {
         ${lab.pos ? `<button class="link" data-act="label-reset">${ICONS.reset} reimposta</button>` : ''}</div>`;
     }
     h += '</section>';
+    }
 
     // geometria
     if (g) {

@@ -182,31 +182,17 @@ const Render = (() => {
     });
   }
 
-  // Livello di dettaglio: da lontano si legge il nome del regno, avvicinandosi
-  // il nome del regno sparisce e compaiono quelli delle sue marche e protettorati.
+  // Il nome del regno non compare mai da solo sulla mappa: lo si legge tra parentesi
+  // sotto quello delle marche, che da lontano spariscono lasciando solo i colori.
   // Intervallo (px) in cui un'etichetta è leggibile senza coprire la mappa
-  const PX = { regno: [9, 48], continente: [10, 110], territorio: [9, 170], regione: [9, 150] };
+  const PX = { continente: [10, 110], territorio: [9, 170], regione: [9, 150] };
   const pxRange = k => PX[k] || [7, 260];
   function updateLabels(zoom) {
     const scale = Math.pow(2, zoom ?? map.getZoom());
-    const kingdomShown = new Set();
-    items.forEach(it => {
-      const px = it.size * scale;
-      if (it.kind === 'regno' && it.el && it.show && px >= PX.regno[0] && px <= PX.regno[1]) kingdomShown.add(it.id);
-    });
     items.forEach(it => {
       if (!it.el) return;
       const px = it.size * scale;
-      if (it.kind === 'regno') {
-        const on = kingdomShown.has(it.id);
-        it.el.style.display = on ? '' : 'none';
-        if (on) it.el.firstChild.style.fontSize = px.toFixed(1) + 'px';
-        return;
-      }
-      if (KINDS[it.kind].political && state.selected !== it.id) {
-        const k = Store.get(it.id)?.properties.kingdom;
-        if (k && kingdomShown.has(k)) { it.el.style.display = 'none'; return; }
-      }
+      if (it.kind === 'regno') { it.el.style.display = 'none'; return; }
       if (it.kind === 'localita') {
         const txt = it.el.querySelector('.txt');
         const dotOn = it.show !== false && (px >= 5 || state.selected === it.id);
