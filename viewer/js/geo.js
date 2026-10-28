@@ -73,7 +73,13 @@ const Geo = (() => {
   const bboxHit = (a, b, m = 0) => a[0] - m <= b[2] && b[0] - m <= a[2] && a[1] - m <= b[3] && b[1] - m <= a[3];
   const bounds = g => { const b = bbox(g); return L.latLngBounds(ll([b[0], b[1]]), ll([b[2], b[3]])); };
 
-  function countVertices(g) { let n = 0; eachCoord(g, () => n++); return n; }
+  // Negli anelli dei poligoni l'ultima coordinata ripete la prima: non è un vertice a sé
+  function countVertices(g) {
+    let n = 0;
+    if (isPoly(g)) polygons(g).forEach(p => p.forEach(r => n += r.length - 1));
+    else eachCoord(g, () => n++);
+    return n;
+  }
 
   // ---- misure (planari, in blocchi) ----
   function ringArea(r) {
