@@ -1,9 +1,9 @@
 // Apertura e salvataggio dei file GeoJSON, bozza automatica nel browser.
 const IO = (() => {
-  const DEFAULT_URL = '../data/panera.geojson';
   const DRAFT_KEY = 'panera-editor-draft';
   const TYPES = [{ description: 'Mappa GeoJSON', accept: { 'application/geo+json': ['.geojson', '.json'] } }];
-  let handle = null, fileName = 'panera.geojson', draftTimer = null;
+  const NEW_NAME = 'nuova-mappa.geojson';
+  let handle = null, fileName = NEW_NAME, draftTimer = null;
   const listeners = [];
 
   const notify = () => listeners.forEach(fn => fn());
@@ -37,7 +37,8 @@ const IO = (() => {
     notify();
   }
 
-  async function loadInitial() {
+  // All'avvio la mappa è vuota; si ripristina solo una bozza con modifiche non salvate
+  function loadInitial() {
     const draft = readDraft();
     if (draft && draft.dirty) {
       Store.load(draft.data);
@@ -46,23 +47,8 @@ const IO = (() => {
       notify();
       return { restored: draft.savedAt };
     }
-    try {
-      const r = await fetch(DEFAULT_URL, { cache: 'no-store' });
-      if (!r.ok) throw new Error(r.status);
-      loadData(parse(await r.text(), 'panera.geojson'), 'panera.geojson');
-      return { file: DEFAULT_URL };
-    } catch {
-      if (draft) { Store.load(draft.data); fileName = draft.fileName || fileName; notify(); return { draft: true }; }
-      Store.load({ type: 'FeatureCollection', features: [] });
-      notify();
-      return { empty: true };
-    }
-  }
-
-  async function reloadDefault() {
-    const r = await fetch(DEFAULT_URL, { cache: 'no-store' });
-    if (!r.ok) throw new Error('data/panera.geojson non raggiungibile');
-    loadData(parse(await r.text(), 'panera.geojson'), 'panera.geojson');
+    newMap();
+    return {};
   }
 
   async function open() {
@@ -106,7 +92,8 @@ const IO = (() => {
     if (!asNew && handle) {
       try { await writeTo(handle, text); return saved(); } catch (e) { if (e.name === 'AbortError') return false; }
     }
-    const suggestedName = asNew ? `panera_${stamp()}.geojson` : fileName;
+    // Il nome proposto va completato a mano: panera_AAAA-MM-GG_hhmm_<autore>_<stato>.geojson
+    const suggestedName = asNew || fileName === NEW_NAME ? `panera_${stamp()}.geojson` : fileName;
     if (window.showSaveFilePicker) {
       try {
         const h = await showSaveFilePicker({ suggestedName, types: TYPES });
@@ -133,7 +120,7 @@ const IO = (() => {
   }
 
   function newMap() {
-    loadData({ type: 'FeatureCollection', features: [] }, 'nuova-mappa.geojson');
+    loadData({ type: 'FeatureCollection', features: [] }, NEW_NAME);
   }
 
   // ---- bozza automatica ----
@@ -158,7 +145,7 @@ const IO = (() => {
   }
 
   return {
-    loadInitial, reloadDefault, open, openFile, save, newMap, scheduleDraft, serialize,
+    loadInitial, open, openFile, save, newMap, scheduleDraft, serialize,
     onChange: fn => listeners.push(fn),
     get fileName() { return fileName; }, get draftState() { return draftState; }, get hasHandle() { return !!handle; }
   };

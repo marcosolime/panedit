@@ -3,8 +3,10 @@
 render_*/
 *.zip
 
-# Copie create con "Salva come…" (panera_AAAA-MM-GG_hhmm.geojson): il file ufficiale è data/panera.geojson
-data/panera_*.geojson
+# Sul repo vanno solo le mappe nominate secondo la convenzione
+# panera_AAAA-MM-GG_hhmm_<autore>_<stato>.geojson; le altre (prove, copie) restano locali.
+data/*.geojson
+!data/panera_????-??-??_????_*_*.geojson
 
 # Python
 __pycache__/

@@ -1,7 +1,8 @@
 # Editor cartografico di Panera
 
 Editor web per disegnare la carta politica e geografica di Panera sopra le tiles generate da uNmINeD.
-I dati cartografici stanno in un file GeoJSON (`data/panera.geojson`).
+I dati cartografici stanno in file GeoJSON: l'editor si apre con una mappa vuota, da cui se ne crea una nuova
+oppure se ne apre una esistente con **Apri** (o trascinando il file sulla finestra).
 
 ## Avvio
 
@@ -21,8 +22,7 @@ successiva, ma lì non si vedranno le bozze salvate sulla 8765.
 Per installare Python: su Windows da <https://www.python.org/downloads/> (spuntando "Add python.exe to PATH");
 su Linux è quasi sempre già presente, altrimenti `sudo apt install python3` (o l'equivalente della distribuzione).
 
-Aprendo direttamente `viewer/index.html` dal disco la mappa funziona lo stesso, ma il browser non permette
-di leggere in automatico `data/panera.geojson`: in quel caso usa **Apri** o trascina il file sulla finestra.
+Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 
 ## Cartelle
 
@@ -30,7 +30,7 @@ di leggere in automatico `data/panera.geojson`: in quel caso usa **Apri** o tras
 |---|---|
 | `render_…/` | tiles di uNmINeD (la cartella usata è indicata in `viewer/js/basemap.js`) |
 | `viewer/` | l'editor (`index.html`, `css/`, `js/`, librerie in `lib/`, tutto in locale) |
-| `data/panera.geojson` | i dati cartografici caricati all'avvio |
+| `data/` | le mappe GeoJSON (vedi sotto per i nomi dei file) |
 
 ## Uso
 
@@ -81,9 +81,17 @@ della marca vicina. **Aggancio**: i vertici trascinati si agganciano a quelli de
 ### Salvataggio
 
 - **Salva** riscrive il file aperto (in Chrome/Edge, dopo il primo consenso); altrimenti chiede dove salvare.
-- **Salva come…** crea sempre un nuovo file `panera_AAAA-MM-GG_hhmm.geojson`.
+- **Salva come…** crea sempre un nuovo file e propone il nome `panera_AAAA-MM-GG_hhmm.geojson`, da completare
+  con autore e stato (vedi sotto).
 - Ogni modifica viene anche salvata come bozza nel browser: se chiudi senza salvare, alla riapertura
-  l'editor la ripristina (con l'opzione *Scarta*).
+  l'editor la ripristina (con l'opzione *Scarta*, che riparte da una mappa vuota).
+
+### Nomi dei file
+
+Le mappe da pubblicare sul repo si salvano in `data/` con il nome
+`panera_AAAA-MM-GG_hhmm_<autore>_<stato>.geojson`, per esempio `panera_2026-10-30_1420_marco_official.geojson`
+(`<stato>`: `official` per la versione ufficiale, `draft` per una bozza). Git tiene solo i file con questo nome:
+gli altri GeoJSON in `data/` (prove, copie) restano locali.
 
 ## Formato del file
 
