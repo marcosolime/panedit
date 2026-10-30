@@ -92,6 +92,12 @@ const Basemap = (() => {
     return map;
   }
 
+  // Luminosità e saturazione (in %) delle sole tiles: confini, colori ed etichette restano invariati
+  function setFilter(map, brightness, saturation) {
+    map.getPane('tilePane').style.filter =
+      brightness === 100 && saturation === 100 ? '' : `brightness(${brightness}%) saturate(${saturation}%)`;
+  }
+
   // "Isole": gruppi di regioni contigue, per saltare alle zone lontane dall'origine
   function clusters() {
     const seen = new Set(), out = [];
@@ -112,5 +118,5 @@ const Basemap = (() => {
     return out.sort((a, b) => b.n - a.n);
   }
 
-  return { load, create, clusters };
+  return { load, create, setFilter, clusters };
 })();

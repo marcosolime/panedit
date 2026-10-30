@@ -734,6 +734,19 @@ const UI = (() => {
     grid.checked = Settings.grid;
     grid.addEventListener('change', () => { Settings.grid = grid.checked; Settings.save(); Overlays.setGrid(grid.checked); grid.blur(); });
 
+    // Filtro dello sfondo: preferenza del browser, non va nel file
+    const bgFx = [[$('#optBright'), 'bgBrightness'], [$('#optSat'), 'bgSaturation']];
+    const applyBg = () => {
+      bgFx.forEach(([el, key]) => { el.value = Settings[key]; el.nextElementSibling.textContent = Settings[key] + '%'; });
+      Basemap.setFilter(map, Settings.bgBrightness, Settings.bgSaturation);
+    };
+    bgFx.forEach(([el, key]) => {
+      el.addEventListener('input', () => { Settings[key] = +el.value; applyBg(); });
+      el.addEventListener('change', () => { Settings.save(); el.blur(); });
+      el.addEventListener('dblclick', () => { Settings[key] = 100; applyBg(); Settings.save(); });
+    });
+    applyBg();
+
     const zones = $('#zones');
     zones.innerHTML = '<option value="">Vai a una zona…</option>' + Basemap.clusters()
       .map(c => `<option value="${c.x},${c.z}">${c.x}, ${c.z} (${c.n} regioni)</option>`).join('');

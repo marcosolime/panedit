@@ -1,7 +1,7 @@
 # Nuove funzioni (richieste di Raj)
 
 Piano per quattro modifiche all'editor chieste da Raj.
-Stato: **fase 0 completata**, fasi 1–5 da fare (30/10/2026).
+Stato: **fasi 0 e 1 completate**, fasi 2–5 da fare (30/10/2026).
 
 > - Protettorato, inclusione di più regni (es. Avalon-Papasan) con mix di colori se 2 regni ne fanno parte
 > - Creazione di linee di confine tipo dmz, vedi Green Line o Blackline (aggiungerei una categoria sotto territori
@@ -80,7 +80,7 @@ etichette multiple dei fiumi); la fase 4 è indipendente e si può anticipare.
 **Fatta quando**: l'editor si avvia su una mappa vuota, apre `data/panera.geojson` con **Apri**, e
 `git status` non mostra i GeoJSON di prova.
 
-### Fase 1: filtro luminosità e saturazione
+### Fase 1: filtro luminosità e saturazione ✔
 
 - `filter: brightness(…) saturate(…)` sul **solo pane delle tiles** (`tilePane`, in
   [basemap.js](../viewer/js/basemap.js)): confini, colori, etichette e griglia restano invariati.

@@ -1,7 +1,7 @@
 // Preferenze dell'editor (ricordate nel browser)
 const Settings = (() => {
   const KEY = 'panera-editor-settings';
-  const s = { snap: true, link: true, grid: false, leftOpen: true, rightOpen: true, overlap: 'clip', target: 'marca', kingdom: null, simplify: 2 };
+  const s = { snap: true, link: true, grid: false, leftOpen: true, rightOpen: true, overlap: 'clip', target: 'marca', kingdom: null, simplify: 2, bgBrightness: 100, bgSaturation: 100 };
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY)) || {}); } catch { /* preferenze di default */ }
   Object.defineProperty(s, 'save', {
     value: () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* non essenziale */ } }

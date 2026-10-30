@@ -48,6 +48,9 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   una nuova entità, per darle il nome.
 - **Ispettore a destra**: nome, tipo, regno, categoria, colore, etichetta (dimensione, rotazione, posizione),
   misure, note.
+- **Sfondo**: in fondo al pannello di destra, accanto alla griglia dei chunk, gli slider di **luminosità** e
+  **saturazione** scuriscono o spengono le tiles lasciando invariati confini, colori ed etichette (doppio clic
+  per tornare al 100 %). Sono preferenze del browser e non finiscono nel file.
 
 ### Strumenti
 
