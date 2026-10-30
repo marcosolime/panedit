@@ -109,20 +109,22 @@ const Render = (() => {
       const a = kingdomArea(f.id);
       return a ? clamp(Math.sqrt(a) * 0.28 / Math.max(1, len / 8), 150, 2400) : 150;
     }
-    if (!g) return 60;
+    // Valori tarati sulle dimensioni scelte a mano nelle mappe reali (quasi sempre sotto i 30 blocchi)
+    if (!g) return 20;
     if (g.type === 'Point') {
-      if (k === 'localita') return { capitale: 44, citta: 32, villaggio: 22, castello: 24, porto: 24, luogo: 18 }[p.subtype] || 26;
-      if (k === 'acqua') return { oceano: 300, mare: 200, golfo: 100, lago: 60, laguna: 60, baia: 60, stretto: 60, fiume: 32, torrente: 24, canale: 32 }[p.subtype] || 60;
-      return { continente: 360, regione: 140, territorio: 200 }[k] || 80;
+      if (k === 'localita') return { capitale: 14, citta: 10, villaggio: 8, castello: 8, porto: 8, luogo: 6 }[p.subtype] || 9;
+      if (k === 'acqua') return { oceano: 100, mare: 70, golfo: 35, lago: 20, laguna: 20, baia: 20, stretto: 20, fiume: 10, torrente: 8, canale: 10 }[p.subtype] || 20;
+      return { continente: 120, regione: 50, territorio: 70 }[k] || 25;
     }
-    if (Geo.isLine(g)) return clamp(Geo.length(g) / len / 6, 16, 80);
+    // cresce con la radice della lunghezza: sulle linee lunghe il nome si ripete invece di ingrandirsi
+    if (Geo.isLine(g)) return clamp(Math.sqrt(Geo.lineAt(g, 0.5).length) * 0.6 / Math.max(1, len / 8), 4, 40);
     const b = Geo.bbox(g), w = b[2] - b[0];
     // larghezza media di un carattere (in em) secondo lo stile dell'etichetta, spaziatura inclusa
     const em = { continente: 1.25, regione: 0.75, acqua: 0.8 }[k] || 0.82;
-    let s = Math.sqrt(Geo.area(g)) * 0.11;
+    let s = Math.sqrt(Geo.area(g)) * 0.08;
     s = Math.min(s, w * 0.85 / (len * em));
-    const [lo, hi] = { marca: [22, 420], protettorato: [16, 300], territorio: [60, 900], regione: [40, 700],
-      continente: [120, 1600], acqua: [20, 600] }[k] || [20, 400];
+    const [lo, hi] = { marca: [6, 420], protettorato: [5, 300], territorio: [10, 900], regione: [8, 700],
+      continente: [15, 1600], acqua: [4, 600] }[k] || [4, 400];
     return clamp(s, lo, hi);
   }
   const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
@@ -147,14 +149,28 @@ const Render = (() => {
   }
   const kingdomArea = kid => kingdomShape(kid).area;
 
-  function labelPlacement(f) {
+  // Larghezza approssimativa del nome in blocchi (0,8 em per carattere, come in autoSize)
+  const textWidth = f => (f.properties.label.size || autoSize(f)) * Math.max(4, (f.properties.name || '').length) * 0.8;
+  // Sulle linee il nome si ripete lasciando tra una copia e l'altra almeno REPEAT_GAP volte la sua larghezza
+  const REPEAT_GAP = 3.5, REPEAT_MAX = 6;
+
+  // Posizioni dell'etichetta: una sola, tranne sulle linee lunghe senza posizione manuale
+  function labelPlacements(f) {
     const p = f.properties, g = f.geometry;
     let pos = p.label.pos, rot = p.label.rotation;
     if (p.kind === 'regno') pos = pos || kingdomShape(f.id).pos;
     else if (g && g.type === 'Point') pos = g.coordinates;
-    else if (Geo.isLine(g)) { const m = Geo.lineMid(g); pos = pos || m.pos; if (rot == null) rot = m.angle; }
+    else if (Geo.isLine(g)) {
+      const span = textWidth(f), mid = Geo.lineAt(g, 0.5, span);
+      if (pos) return [{ pos, rot: rot ?? mid.angle }];
+      const n = clamp(Math.floor(mid.length / (span * REPEAT_GAP)), 1, REPEAT_MAX);
+      return Array.from({ length: n }, (_, i) => {
+        const m = n === 1 ? mid : Geo.lineAt(g, (i + 1) / (n + 1), span);
+        return { pos: m.pos, rot: rot ?? m.angle };
+      });
+    }
     else if (Geo.isPoly(g)) pos = pos || cachedLabelPoint(g);
-    return { pos, rot: rot || 0 };
+    return [{ pos, rot: rot || 0 }];
   }
 
   function labelHtml(f) {
@@ -166,8 +182,7 @@ const Render = (() => {
     return `<span class="t"${style}>${esc(p.name || '—')}</span>${sub}`;
   }
 
-  function makeLabel(f, interactive) {
-    const { pos, rot } = labelPlacement(f);
+  function makeLabel(f, interactive, { pos, rot }) {
     if (!pos) return null;
     const p = f.properties;
     const html = p.kind === 'localita'
@@ -190,47 +205,50 @@ const Render = (() => {
   function updateLabels(zoom) {
     const scale = Math.pow(2, zoom ?? map.getZoom());
     items.forEach(it => {
-      if (!it.el) return;
+      if (!it.els.length) return;
       const px = it.size * scale;
-      if (it.kind === 'regno') { it.el.style.display = 'none'; return; }
+      if (it.kind === 'regno') { it.els.forEach(el => { el.style.display = 'none'; }); return; }
+      // L'entità selezionata mostra sempre il nome, per poterlo trascinare; se è nascosto lo mostra attenuato
+      const sel = state.selected === it.id, off = sel && !it.show;
       if (it.kind === 'localita') {
-        const txt = it.el.querySelector('.txt');
-        const dotOn = it.show !== false && (px >= 5 || state.selected === it.id);
-        it.el.style.display = dotOn ? '' : 'none';
-        if (txt) { txt.style.display = it.show && px >= 8 ? '' : 'none'; txt.style.fontSize = px.toFixed(1) + 'px'; }
+        const el = it.els[0], txt = el.querySelector('.txt');
+        el.style.display = px >= 5 || sel ? '' : 'none';   // il pallino non dipende da "mostra il nome"
+        el.classList.toggle('pe-label-off', off);
+        if (txt) { txt.style.display = (it.show || sel) && px >= 8 ? '' : 'none'; txt.style.fontSize = px.toFixed(1) + 'px'; }
         return;
       }
       const [lo, hi] = pxRange(it.kind);
-      const on = (it.show && px >= lo && px <= hi) || (state.selected === it.id && (it.pointShape || px <= 260));
-      it.el.style.display = on ? '' : 'none';
-      if (on) it.el.firstChild.style.fontSize = Math.max(px, 7).toFixed(1) + 'px';
+      const on = (it.show && px >= lo && px <= hi) || (sel && (it.pointShape || px <= 260));
+      it.els.forEach(el => {
+        el.style.display = on ? '' : 'none';
+        el.classList.toggle('pe-label-off', off);
+        if (on) el.firstChild.style.fontSize = Math.max(px, 7).toFixed(1) + 'px';
+      });
     });
   }
 
   // ---- costruzione dei layer ----
   function create(f) {
     const p = f.properties, g = f.geometry, id = f.id;
-    const it = { id, kind: p.kind, shape: null, label: null, el: null, size: p.label.size || autoSize(f), show: p.label.show !== false };
+    // labels / els: le etichette e i loro elementi; per i punti l'unica etichetta è la forma stessa
+    const it = { id, kind: p.kind, shape: null, labels: [], els: [], size: p.label.size || autoSize(f), show: p.label.show !== false };
     if (g && g.type === 'Point') {
-      it.shape = it.label = makeLabel(f, true);
+      it.shape = makeLabel(f, true, labelPlacements(f)[0]);
       it.pointShape = true;
     } else if (g && (Geo.isPoly(g) || Geo.isLine(g))) {
       const opts = { pane: p.kind in PANES ? p.kind : 'marca', className: `pe-k-${p.kind}${p.kind === 'territorio' ? ' pe-soft' : ''}`,
         ...baseStyle(f) };
       it.shape = Geo.isPoly(g) ? L.polygon(Geo.toLatLngs(g), opts) : L.polyline(Geo.toLatLngs(g), opts);
-      it.label = makeLabel(f, false);
-    } else if (p.kind === 'regno') {
-      it.label = makeLabel(f, false);
     }
     if (it.shape) {
       it.shape.addTo(map);
       bindShape(it, id);
     }
-    if (it.label && it.label !== it.shape) it.label.addTo(map);
-    if (it.label) {
-      it.el = it.label.getElement();
-      it.label.on('dragend', () => hooks.moved(id, Geo.xz(it.label.getLatLng()), it.label === it.shape));
-    }
+    if (it.pointShape) {
+      it.labels = [it.shape];
+      it.els = [it.shape.getElement()];
+      it.shape.on('dragend', () => hooks.moved(id, Geo.xz(it.shape.getLatLng()), true));
+    } else if (it.shape || p.kind === 'regno') addLabels(it, f);
     items.set(id, it);
     restyle(id);
     return it;
@@ -249,25 +267,48 @@ const Render = (() => {
     }
   }
 
+  // Etichette (non interattive) di aree, linee e regni; trascinandone una si fissa la posizione
+  function addLabels(it, f) {
+    it.labels = labelPlacements(f).map(pl => makeLabel(f, false, pl)).filter(Boolean);
+    it.labels.forEach(l => {
+      l.addTo(map);
+      l.on('dragend', () => hooks.moved(it.id, Geo.xz(l.getLatLng()), false));
+    });
+    it.els = it.labels.map(l => l.getElement());
+  }
+  function removeLabels(it) {
+    if (!it.pointShape) it.labels.forEach(l => l.remove());
+    it.labels = []; it.els = [];
+  }
+
   function destroy(id) {
     const it = items.get(id);
     if (!it) return;
     if (it.shape && it.shape.pm && it.shape.pm.enabled && it.shape.pm.enabled()) it.shape.pm.disable();
     if (it.shape) it.shape.remove();
-    if (it.label && it.label !== it.shape) it.label.remove();
+    removeLabels(it);
     items.delete(id);
   }
 
-  // Aggiorna etichetta e stile senza ricreare la forma (usato mentre la si modifica)
+  // Aggiorna etichette e stile senza ricreare la forma (usato mentre la si modifica)
   function refresh(it, f) {
-    if (it.label && it.label !== it.shape) {
-      const { pos, rot } = labelPlacement(f);
-      if (pos) it.label.setLatLng(Geo.ll(pos));
-      const inner = it.el && it.el.firstChild;
-      if (inner) { inner.innerHTML = labelHtml(f); inner.style.setProperty('--r', rot + 'deg'); }
-    }
     it.size = f.properties.label.size || autoSize(f);
     it.show = f.properties.label.show !== false;
+    if (!it.pointShape) {
+      const places = labelPlacements(f);
+      if (places.length !== it.labels.length) {
+        // cambia il numero di ripetizioni (linea allungata, etichetta trascinata o reimpostata)
+        removeLabels(it);
+        addLabels(it, f);
+        if (state.selected === f.id && state.editing) labelDrag(it, true);
+      } else {
+        places.forEach(({ pos, rot }, i) => {
+          if (pos) it.labels[i].setLatLng(Geo.ll(pos));
+          const inner = it.els[i] && it.els[i].firstChild;
+          if (inner) { inner.innerHTML = labelHtml(f); inner.style.setProperty('--r', rot + 'deg'); }
+        });
+      }
+    }
     restyle(f.id);
   }
 
@@ -300,14 +341,14 @@ const Render = (() => {
     if (kingdoms) [...items].forEach(([id, it]) => {
       const f = Store.get(id);
       if (it.kind === 'regno' || !f || !f.properties.kingdom) return;
-      if (it.label === it.shape) sync(id); else refresh(it, f);
+      if (it.pointShape) sync(id); else refresh(it, f);
     });
     Store.all('regno').forEach(k => { const it = items.get(k.id); if (it) refreshKingdom(it, k); else create(k); });
     updateLabels();
   }
   function refreshKingdom(it, k) {
     // senza marche il regno non ha posizione: l'etichetta va tolta (o creata quando torna ad averne)
-    if (!it.label || !labelPlacement(k).pos) { destroy(k.id); create(k); return; }
+    if (!it.labels.length || !labelPlacements(k)[0].pos) { destroy(k.id); create(k); return; }
     refresh(it, k);
   }
 
@@ -371,13 +412,20 @@ const Render = (() => {
         removeVertexOn: 'contextmenu'
       });
     }
-    if (it.label && it.label.dragging) { it.label.dragging.enable(); it.el?.classList.add('is-draggable'); }
+    labelDrag(it, true);
   }
   function disableEdit(id) {
     const it = items.get(id);
     if (!it) return;
     if (it.shape && it.shape.pm && it.shape.pm.enabled()) it.shape.pm.disable();
-    if (it.label && it.label.dragging) { it.label.dragging.disable(); it.el?.classList.remove('is-draggable'); }
+    labelDrag(it, false);
+  }
+  function labelDrag(it, on) {
+    it.labels.forEach((l, i) => {
+      if (!l.dragging) return;
+      on ? l.dragging.enable() : l.dragging.disable();
+      it.els[i]?.classList.toggle('is-draggable', on);
+    });
   }
 
   function boundsOf(id) {

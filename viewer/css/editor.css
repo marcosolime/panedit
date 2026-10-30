@@ -231,6 +231,8 @@ path.pe-soft.pe-selected { filter: none; }
 }
 .pe-label .in small { display: block; font-size: .5em; margin-top: .25em; letter-spacing: .05em; font-weight: 700; }
 .pe-label.is-draggable .in { outline: 1px dashed rgba(255,255,255,.6); outline-offset: 4px; border-radius: 2px; }
+/* nome nascosto ("Mostra il nome" spento) ma entità selezionata: visibile solo attenuato */
+.pe-label.pe-label-off:not(.pe-label-localita) .in, .pe-label-localita.pe-label-off .txt { opacity: .4; }
 
 .pe-label-regno .in { font-weight: 900; letter-spacing: .22em; color: rgba(255,255,255,.92); -webkit-text-stroke-width: .09em; }
 .pe-label-marca .in { letter-spacing: .03em; }
@@ -309,7 +311,18 @@ path.pe-soft.pe-selected { filter: none; }
 .chk { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; cursor: pointer; }
 .chk input, .mini input[type=checkbox] { accent-color: var(--accent); }
 .rng { display: flex; align-items: center; gap: 10px; }
-.rng input[type=range] { flex: 1; accent-color: var(--accent); }
+.rng input[type=range] { flex: 1; min-width: 0; accent-color: var(--accent); }
+.rot { display: flex; align-items: center; gap: 14px; }
+.dial { width: 132px; height: 77px; flex: none; cursor: pointer; touch-action: none; outline: none; border-radius: 6px; }
+.dial:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.dial .arc { fill: none; stroke: var(--line-2); stroke-width: 1.5; }
+.dial line { stroke: var(--faint); stroke-width: 1; }
+.dial line.maj { stroke: var(--muted); stroke-width: 1.5; }
+.dial text { fill: var(--muted); font: 9px var(--ui); text-anchor: middle; user-select: none; }
+.dial .needle line { stroke: var(--accent); stroke-width: 2.5; stroke-linecap: round; }
+.dial .needle circle { fill: var(--accent); }
+.dial.auto .needle { opacity: .35; }
+.rng input.num { width: 58px; flex: none; height: 26px; padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); color: var(--text); font-variant-numeric: tabular-nums; }
 .mini { display: inline-flex; align-items: center; gap: 4px; color: var(--muted); font-size: 12px; }
 .mini input[type=number] { width: 54px; height: 26px; padding: 0 5px; border: 1px solid var(--line); border-radius: 5px; background: var(--surface-2); }
 .muted { color: var(--muted); font-size: 12px; margin: 0; }

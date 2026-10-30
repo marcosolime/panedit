@@ -1,7 +1,7 @@
 # Nuove funzioni (richieste di Raj)
 
 Piano per quattro modifiche all'editor chieste da Raj.
-Stato: **fasi 0 e 1 completate**, fasi 2–5 da fare (30/10/2026).
+Stato: **fasi 0–2 completate**, fasi 3–5 da fare (31/10/2026).
 
 > - Protettorato, inclusione di più regni (es. Avalon-Papasan) con mix di colori se 2 regni ne fanno parte
 > - Creazione di linee di confine tipo dmz, vedi Green Line o Blackline (aggiungerei una categoria sotto territori
@@ -95,26 +95,59 @@ etichette multiple dei fiumi); la fase 4 è indipendente e si può anticipare.
 **Fatta quando**: abbassando i due slider lo sfondo si scurisce e si spegne mentre i colori dei regni restano
 identici, e ricaricando la pagina i valori restano.
 
-### Fase 2: etichette multiple e nome dei fiumi ripetuto
+### Fase 2: etichette multiple e nome dei fiumi ripetuto ✔
 
 - **Etichette multiple** in [render.js](../viewer/js/render.js): da `it.label` / `it.el` a `it.labels[]` /
-  `it.els[]`, adattando `create`, `destroy`, `refresh`, `updateLabels`, l'evidenziazione e il trascinamento.
-  Le entità con un'etichetta sola (quasi tutte) hanno semplicemente un array di un elemento.
-- **`Geo.lineAt(g, t)`** in [geo.js](../viewer/js/geo.js): generalizza `lineMid`, restituisce punto e angolo alla
-  frazione `t` della linea. L'angolo si calcola sulla **corda** di un tratto lungo quanto l'etichetta, non sul
-  singolo segmento: le linee a mano libera hanno segmenti cortissimi e l'angolo del segmento "balla".
-  `lineMid(g)` diventa `lineAt(g, 0.5)`.
-- **Numero di ripetizioni**: N = `clamp(round(lunghezza / passo), 1, 6)`, con il passo in blocchi proporzionale
-  alla dimensione del testo (punto di partenza: 25 × `label.size`, da tarare sulla mappa di prova). Posizioni a
-  `t = i/(N+1)`. Il calcolo è in blocchi, non in pixel, così le etichette non si spostano zoomando.
-- **Zoom lontano**: in `updateLabels`, se due ripetizioni distano in pixel meno della larghezza del testo se ne
-  nasconde una sì e una no, fino a lasciare solo quella centrale.
-- **Posizione e rotazione manuali**: se `label.pos` è impostato (etichetta trascinata) si mostra solo quella,
-  come oggi; se `label.rotation` è impostata vale per tutte le ripetizioni.
-- Vale per tutte le acque lineari (fiume, torrente, canale). Nessun campo nuovo nel file.
+  `it.els[]` (funzioni `addLabels`, `removeLabels`, `labelDrag`), adattando `create`, `destroy`, `refresh`,
+  `updateLabels` e il trascinamento. Le entità con un'etichetta sola (quasi tutte) hanno un array di un elemento;
+  per i punti l'unica etichetta resta la forma stessa (`it.pointShape`).
+- **`Geo.lineAt(g, t, span)`** in [geo.js](../viewer/js/geo.js) sostituisce `lineMid`: punto alla frazione `t`
+  della linea, angolo e lunghezza. Con `span` l'angolo è quello della **corda** lunga `span` blocchi centrata sul
+  punto (si usa la larghezza del nome): le linee a mano libera hanno segmenti cortissimi e l'angolo del singolo
+  segmento "balla".
+- **Numero di ripetizioni** (`labelPlacements` in `render.js`): N = `clamp(floor(lunghezza / (3,5 × larghezza
+  del nome)), 1, 6)`, con la larghezza stimata come `dimensione × caratteri × 0,8`. Posizioni a `t = i/(N+1)`.
+  Tutto in blocchi: le etichette non si spostano zoomando.
+- **Niente diradamento allo zoom**: distanza tra le copie e larghezza del testo sono entrambe in blocchi e
+  scalano insieme, quindi se non si toccano a uno zoom non si toccano a nessuno.
+- **Dimensione automatica delle linee**: prima cresceva in proporzione alla lunghezza (le ripetizioni sarebbero
+  state sempre lo stesso numero); ora cresce con la **radice** della lunghezza, `clamp(√L × 0,8 / max(1,
+  caratteri/8), 10, 60)`. Riguarda solo le linee con dimensione "auto"; quelle con `label.size` fissata non
+  cambiano.
+- **Posizione e rotazione manuali**: trascinando una qualsiasi copia si fissa `label.pos` e resta solo quella;
+  "reimposta" nell'ispettore ripristina le ripetizioni. `label.rotation`, se impostata, vale per tutte le copie.
+- Vale per tutte le linee (oggi fiume, torrente, canale; domani la DMZ). Nessun campo nuovo nel file.
 
 **Fatta quando**: sulla mappa di prova il fiume lungo mostra 2–3 nomi che seguono l'andamento del fiume senza
-storture, il fiume corto uno solo, e zoomando indietro i nomi non si accavallano.
+storture, il fiume corto uno solo, e trascinare / reimpostare l'etichetta funziona.
+
+### Fase 2b: dimensione delle etichette ✔
+
+Richiesta emersa durante i lavori: le etichette vanno quasi sempre ridotte sotto i 30 blocchi, e lì lo slider
+era poco preciso (8–2000 blocchi in 100 scatti, solo interi: la fascia 8–30 occupava un quarto della corsa).
+Vale per tutte le entità.
+
+- **Slider** ([ui.js](../viewer/js/ui.js)): logaritmico da **2 a 150 blocchi** in 1000 scatti; la fascia 2–30
+  occupa circa due terzi della corsa. Precisione di mezzo blocco sotto i 20, un blocco sopra.
+- **Campo numerico** accanto allo slider: valore esatto, frecce ±0,5 sotto i 20 e ±1 sopra, accetta fino a
+  2000 blocchi (oceani e simili). Slider e campo restano allineati.
+- **Dimensione automatica ricalibrata** ([render.js](../viewer/js/render.js), `autoSize`) sulle dimensioni
+  scelte a mano in `panera.geojson`: coefficiente delle aree da 0,11 a 0,08, minimi molto più bassi (marche
+  da 22 a 6, continenti da 120 a 15), località circa ÷3 (città 32 → 10), linee `clamp(√L × 0,6 / …, 4, 40)`.
+  Cambia l'aspetto delle etichette in "auto"; quelle con dimensione fissata non cambiano.
+- **Rotazione a quadrante**: al posto dello slider, un semicerchio con la lancetta (in alto 0°, a sinistra -90°,
+  a destra +90°). Clic o trascinamento con precisione di 1° (Shift: scatti di 15°), frecce da tastiera ±1° / ±15°,
+  doppio clic o tasto 0 per tornare a 0°. Con "auto" la lancetta è attenuata.
+- "Mostra il nome sulla mappa": l'entità selezionata mostrava sempre il nome, quindi la spunta sembrava non fare
+  nulla; ora il nome nascosto si vede attenuato finché l'entità è selezionata. Nelle località la spunta nasconde
+  solo il nome, non più anche il pallino.
+- Corretto di passaggio: alla fine del trascinamento degli slider Dimensione e Rotazione si creava un passo di
+  annullamento vuoto ("Etichetta").
+- Nota: un'etichetta compare solo da 7 px a schermo (8 per le località), quindi quelle piccole si vedono solo
+  zoomando: 3 blocchi = visibile dallo zoom +2.
+
+**Fatta quando**: si impostano con lo slider valori come 3, 4,5, 7 senza fatica; il campo numerico e lo slider
+restano allineati; le etichette in "auto" della mappa di prova sono vicine a quelle scelte a mano.
 
 ### Fase 3: DMZ (linea con margine)
 

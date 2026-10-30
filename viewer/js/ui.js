@@ -450,9 +450,29 @@ const UI = (() => {
   }
 
   // ---------------------------------------------------------------- ispettore
-  const SIZE_MIN = 8, SIZE_MAX = 2000;
-  const sizeToSlider = s => Math.round(100 * Math.log(s / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN));
-  const sliderToSize = v => Math.round(SIZE_MIN * Math.pow(SIZE_MAX / SIZE_MIN, v / 100));
+  // Dimensione delle etichette in blocchi. Lo slider è logaritmico e dedica gran parte della corsa ai valori
+  // piccoli (2–30, i più usati); il campo numerico accetta anche valori oltre il fondo scala.
+  // Sotto i 20 blocchi la precisione è di mezzo blocco.
+  const SIZE_MIN = 2, SIZE_MAX = 150, SIZE_FREE_MAX = 2000, SIZE_STEPS = 1000;
+  const roundSize = s => s < 20 ? Math.round(s * 2) / 2 : Math.round(s);
+  const sizeStep = s => s < 20 ? 0.5 : 1;
+  const sizeToSlider = s => Math.round(SIZE_STEPS * Math.log(Math.min(Math.max(s, SIZE_MIN), SIZE_MAX) / SIZE_MIN) / Math.log(SIZE_MAX / SIZE_MIN));
+  const sliderToSize = v => roundSize(SIZE_MIN * Math.pow(SIZE_MAX / SIZE_MIN, v / SIZE_STEPS));
+
+  // Quadrante della rotazione: lancetta in alto = 0°, a sinistra -90°, a destra +90° (come la rotazione del
+  // testo, in senso orario). Tacche ogni 5°, più marcate ogni 15° e 45°.
+  function dialHtml(rot, auto) {
+    const R = 46, ticks = [];
+    for (let a = -90; a <= 90; a += 5) {
+      const len = a % 45 === 0 ? 9 : a % 15 === 0 ? 6 : 3, t = a * Math.PI / 180, x = Math.sin(t), y = -Math.cos(t);
+      ticks.push(`<line x1="${(x * R).toFixed(1)}" y1="${(y * R).toFixed(1)}" x2="${(x * (R - len)).toFixed(1)}" y2="${(y * (R - len)).toFixed(1)}"${a % 15 ? '' : ' class="maj"'}/>`);
+    }
+    return `<svg class="dial${auto ? ' auto' : ''}" viewBox="-60 -58 120 70" tabindex="0" role="slider" aria-label="Rotazione"
+      aria-valuemin="-90" aria-valuemax="90" aria-valuenow="${rot}" data-v="${rot}">
+      <path class="arc" d="M ${-R} 0 A ${R} ${R} 0 0 1 ${R} 0"/>${ticks.join('')}
+      <text x="${-R}" y="10">−90</text><text x="0" y="-50">0</text><text x="${R}" y="10">+90</text>
+      <g class="needle" transform="rotate(${rot})"><line x1="0" y1="5" x2="0" y2="-40"/><circle r="3.5"/></g></svg>`;
+  }
 
   function field(label, control, cls = '') {
     return `<label class="fld ${cls}"><span class="fl">${label}</span>${control}</label>`;
@@ -514,18 +534,19 @@ const UI = (() => {
     }
 
     // etichetta (il regno non ne ha una propria: compare sotto le sue marche)
-    const auto = lab.size == null, size = lab.size || Math.round(Render.autoSize(f));
+    const auto = lab.size == null, size = lab.size || roundSize(Render.autoSize(f));
     const rotAuto = lab.rotation == null;
     if (p.kind !== 'regno') {
     h += `<section><h3>Etichetta</h3>
       <label class="chk"><input type="checkbox" data-l="show"${lab.show !== false ? ' checked' : ''}> Mostra il nome sulla mappa</label>
       ${K.hasKingdom ? `<label class="chk"><input type="checkbox" data-l="showKingdom"${lab.showKingdom !== false ? ' checked' : ''}> Mostra il regno tra parentesi</label>` : ''}
-      <div class="fld"><span class="fl">Dimensione <em id="szVal">${size} blocchi</em></span>
-        <div class="rng"><input type="range" min="0" max="100" data-l="size" value="${sizeToSlider(size)}">
+      <div class="fld"><span class="fl">Dimensione <em>blocchi</em></span>
+        <div class="rng"><input type="range" min="0" max="${SIZE_STEPS}" data-l="size" value="${sizeToSlider(size)}">
+        <input type="number" class="num" data-l="sizeNum" min="${SIZE_MIN}" max="${SIZE_FREE_MAX}" step="${sizeStep(size)}" value="${size}">
         <label class="mini"><input type="checkbox" data-l="sizeAuto"${auto ? ' checked' : ''}> auto</label></div></div>`;
     if (p.kind !== 'localita') {
       h += `<div class="fld"><span class="fl">Rotazione <em id="rotVal">${rotAuto ? 'auto' : lab.rotation + '°'}</em></span>
-        <div class="rng"><input type="range" min="-90" max="90" data-l="rotation" value="${lab.rotation || 0}">
+        <div class="rot">${dialHtml(lab.rotation || 0, rotAuto)}
         <label class="mini"><input type="checkbox" data-l="rotAuto"${rotAuto ? ' checked' : ''}> auto</label></div></div>`;
     } else {
       h += field('Posizione del nome', `<select data-l="anchor">${[['right', 'a destra'], ['left', 'a sinistra'], ['top', 'sopra'], ['bottom', 'sotto']]
@@ -612,9 +633,17 @@ const UI = (() => {
         if (prop === 'kind') showPanel(v);
       } else if (t.dataset.l) {
         const l = t.dataset.l;
+        if (l === 'size') return;   // già applicata durante il trascinamento (evento input)
+        if (l === 'sizeNum') {
+          // a fine digitazione: valore riportato nei limiti e arrotondato
+          const s = roundSize(Math.min(Math.max(+t.value || SIZE_MIN, SIZE_MIN), SIZE_FREE_MAX));
+          setSizeFields(s);
+          upd(p => { p.label.size = s; }, { quiet: true, source: 'edit', coalesce: 'size:' + id, label: 'Dimensione etichetta' });
+          return;
+        }
         upd(p => {
           if (l === 'show' || l === 'showKingdom') p.label[l] = t.checked;
-          else if (l === 'sizeAuto') p.label.size = t.checked ? null : Math.round(Render.autoSize(Store.get(id)));
+          else if (l === 'sizeAuto') p.label.size = t.checked ? null : roundSize(Render.autoSize(Store.get(id)));
           else if (l === 'rotAuto') p.label.rotation = t.checked ? null : 0;
           else if (l === 'anchor') p.label.anchor = t.value;
         }, { label: 'Etichetta' });
@@ -627,23 +656,64 @@ const UI = (() => {
       }
     });
 
-    // cursori: anteprima dal vivo, un solo passo di annullamento
+    // Slider e campo numerico della dimensione mostrano lo stesso valore; quello che si sta usando non si tocca
+    function setSizeFields(s, except) {
+      const rng = el.querySelector('[data-l="size"]'), num = el.querySelector('[data-l="sizeNum"]');
+      if (rng && rng !== except) rng.value = sizeToSlider(s);
+      if (num) { if (num !== except) num.value = s; num.step = sizeStep(s); }
+      const auto = el.querySelector('[data-l="sizeAuto"]'); if (auto) auto.checked = false;
+    }
+
+    // cursori e campo della dimensione: anteprima dal vivo, un solo passo di annullamento
     el.addEventListener('input', e => {
       const t = e.target, id = cur();
-      if (!id || t.type !== 'range') return;
-      if (t.dataset.l === 'size') {
-        const s = sliderToSize(+t.value);
-        $('#szVal').textContent = `${s} blocchi`;
-        const auto = el.querySelector('[data-l="sizeAuto"]'); if (auto) auto.checked = false;
+      if (!id || (t.type !== 'range' && t.dataset.l !== 'sizeNum')) return;
+      if (t.dataset.l === 'size' || t.dataset.l === 'sizeNum') {
+        const v = +t.value;
+        if (t.type !== 'range' && !(v >= SIZE_MIN && v <= SIZE_FREE_MAX)) return;   // numero ancora incompleto
+        const s = t.type === 'range' ? sliderToSize(v) : roundSize(v);
+        setSizeFields(s, t);
         upd(p => { p.label.size = s; }, { quiet: true, source: 'edit', coalesce: 'size:' + id, label: 'Dimensione etichetta' });
-      } else if (t.dataset.l === 'rotation') {
-        $('#rotVal').textContent = `${t.value}°`;
-        const auto = el.querySelector('[data-l="rotAuto"]'); if (auto) auto.checked = false;
-        upd(p => { p.label.rotation = +t.value; }, { quiet: true, source: 'edit', coalesce: 'rot:' + id, label: 'Rotazione etichetta' });
       }
     });
 
+    // quadrante della rotazione: clic o trascinamento sulla lancetta (Shift: scatti di 15°), frecce da tastiera
+    function setRotation(dial, a) {
+      a = Math.max(-90, Math.min(90, a));
+      if (+dial.dataset.v === a && !dial.classList.contains('auto')) return;
+      dial.dataset.v = a;
+      dial.setAttribute('aria-valuenow', a);
+      dial.querySelector('.needle').setAttribute('transform', `rotate(${a})`);
+      dial.classList.remove('auto');
+      $('#rotVal').textContent = `${a}°`;
+      const auto = el.querySelector('[data-l="rotAuto"]'); if (auto) auto.checked = false;
+      upd(p => { p.label.rotation = a; }, { quiet: true, source: 'edit', coalesce: 'rot:' + cur(), label: 'Rotazione etichetta' });
+    }
+    function dialAngle(dial, e) {
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(dial.getScreenCTM().inverse());
+      const a = Math.atan2(p.x, -p.y) * 180 / Math.PI;   // sotto il centro: si ferma a ±90°
+      return e.shiftKey ? Math.round(a / 15) * 15 : Math.round(a);
+    }
+    el.addEventListener('pointerdown', e => {
+      const dial = e.target.closest('.dial');
+      if (!dial || !cur() || e.button !== 0) return;
+      e.preventDefault();
+      dial.focus();
+      dial.setPointerCapture(e.pointerId);
+      const move = ev => setRotation(dial, dialAngle(dial, ev));
+      move(e);
+      dial.onpointermove = move;
+      dial.onpointerup = dial.onpointercancel = () => { dial.onpointermove = dial.onpointerup = dial.onpointercancel = null; };
+    });
+    el.addEventListener('dblclick', e => { const dial = e.target.closest('.dial'); if (dial && cur()) setRotation(dial, 0); });
+
     el.addEventListener('keydown', e => {
+      const dial = e.target.closest?.('.dial');
+      if (dial && cur()) {
+        const v = +dial.dataset.v, step = e.shiftKey ? 15 : 1;
+        const next = { ArrowLeft: v - step, ArrowDown: v - step, ArrowRight: v + step, ArrowUp: v + step, Home: -90, End: 90, 0: 0 }[e.key];
+        if (next !== undefined) { e.preventDefault(); e.stopPropagation(); setRotation(dial, next); return; }
+      }
       if (e.key === 'Enter' && e.target.tagName === 'INPUT') e.target.blur();
       if (e.key === 'Escape') e.target.blur();
     });

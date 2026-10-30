@@ -296,29 +296,46 @@ const Geo = (() => {
     return polylabel(best);
   }
 
-  // Punto a metà lunghezza di una linea, con l'angolo del tratto (gradi, leggibile)
-  function lineMid(g) {
+  // Punto a distanza d dall'inizio della linea l, con il segmento in cui cade
+  function along(l, d) {
+    let acc = 0;
+    for (let i = 1; i < l.length; i++) {
+      const a = l[i - 1], b = l[i], s = Math.hypot(b[0] - a[0], b[1] - a[1]);
+      if (acc + s >= d || i === l.length - 1) {
+        const t = s ? Math.max(0, Math.min(1, (d - acc) / s)) : 0;
+        return { pos: [a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])], a, b };
+      }
+      acc += s;
+    }
+    return { pos: l[0], a: l[0], b: l[0] };
+  }
+  // Angolo da a verso b in gradi, girato in modo che il testo non sia mai capovolto
+  function readable(a, b) {
+    let ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
+    if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;
+    return Math.round(ang);
+  }
+
+  // Punto alla frazione t della linea (la più lunga, se sono più d'una), con l'angolo del tratto
+  // e la lunghezza della linea. Con span > 0 l'angolo è quello della corda lunga span blocchi
+  // centrata sul punto: sulle linee a mano libera il singolo segmento è troppo corto e "balla".
+  function lineAt(g, t, span = 0) {
     const l = g.type === 'MultiLineString'
       ? g.coordinates.reduce((m, c) => lineLength(c) > lineLength(m) ? c : m, g.coordinates[0])
       : g.coordinates;
-    const half = lineLength(l) / 2;
-    let acc = 0;
-    for (let i = 1; i < l.length; i++) {
-      const a = l[i - 1], b = l[i], d = Math.hypot(b[0] - a[0], b[1] - a[1]);
-      if (acc + d >= half) {
-        const t = d ? (half - acc) / d : 0;
-        let ang = Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI;
-        if (ang > 90) ang -= 180; else if (ang < -90) ang += 180;
-        return { pos: [r1(a[0] + t * (b[0] - a[0])), r1(a[1] + t * (b[1] - a[1]))], angle: Math.round(ang) };
-      }
-      acc += d;
+    const len = lineLength(l), d = t * len, h = Math.min(span, len) / 2;
+    const m = along(l, d);
+    let a = m.a, b = m.b;
+    if (h > 0) {
+      const p0 = along(l, Math.max(0, d - h)).pos, p1 = along(l, Math.min(len, d + h)).pos;
+      if (!same(p0, p1, 0.5)) { a = p0; b = p1; }
     }
-    return { pos: l[0], angle: 0 };
+    return { pos: [r1(m.pos[0]), r1(m.pos[1])], angle: readable(a, b), length: len };
   }
 
   return {
     r1, ll, xz, same, isPoly, isLine, toLatLngs, fromLayer, eachCoord, mapLines, polygons,
     bbox, bboxHit, bounds, countVertices, area, length, clean, union, unionAll, diff, fix, simplify,
-    rdp, stitch, moveVertex, polylabel, labelPoint, lineMid, closeRing
+    rdp, stitch, moveVertex, polylabel, labelPoint, lineAt, closeRing
   };
 })();

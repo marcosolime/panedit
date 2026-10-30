@@ -135,9 +135,9 @@ Proprietà comuni: `id` (univoco, usato come riferimento da `kingdom`), `name`, 
 | Campo di `label` | Significato |
 |---|---|
 | `show` | mostra il nome sulla mappa |
-| `size` | altezza del testo in blocchi (`null` = calcolata dall'area) |
+| `size` | altezza del testo in blocchi, minimo 2 (`null` = calcolata dall'area o dalla lunghezza) |
 | `rotation` | gradi (`null` = automatica: 0, oppure lungo il fiume) |
-| `pos` | `[x, z]` del nome (`null` = punto più interno dell'area) |
+| `pos` | `[x, z]` del nome (`null` = punto più interno dell'area; sulle linee lunghe il nome si ripete lungo il tracciato) |
 | `showKingdom` | mostra "(Regno)" sotto il nome di marche e località |
 | `anchor` | solo località: `right`, `left`, `top`, `bottom` |
 
