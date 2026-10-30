@@ -1,13 +1,14 @@
 // Rappresentazione cartografica: aree, linee, punti ed etichette sopra le tiles.
 const Render = (() => {
   let map;
-  const items = new Map();   // id -> { kind, shape, label, el, size, show }
+  const items = new Map();   // id -> { kind, shape, labels, els, band (solo DMZ), size, show, pointShape }
   const state = { hover: null, group: new Set(), selected: null, editing: true, hidden: new Set(), locked: new Set() };
   const hooks = { hover: () => {}, click: () => {}, vertexDragStart: () => {}, vertexDragEnd: () => {}, edited: () => {}, moved: () => {} };
 
-  // Ordine dei livelli (dal basso): continenti, regioni, territori, acque, protettorati, marche, etichette, località
+  // Ordine dei livelli (dal basso): continenti, regioni, territori, acque, protettorati, marche, DMZ (fascia e
+  // linea principale), etichette, località
   const PANES = { continente: 402, regione: 404, territorio: 406, acqua: 408, protettorato: 410, marca: 412,
-    sketch: 440, labels: 450, localita: 460 };
+    dmzBand: 414, dmz: 416, sketch: 440, labels: 450, localita: 460 };
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const norm = s => (s || '').trim().toLowerCase();
@@ -28,7 +29,10 @@ const Render = (() => {
     const k = f && f.properties.kingdom && Store.get(f.properties.kingdom);
     return k && k.properties.kind === 'regno' ? k : null;
   };
-  const colorOf = f => f.properties.color || kingdomOf(f)?.properties.color || KINDS[f.properties.kind].color;
+  // DMZ: territorio tracciato come linea; la fascia cuscinetto è larga 2 × margin blocchi
+  const isDmz = f => f.properties.kind === 'territorio' && Geo.isLine(f.geometry);
+  const DMZ_COLOR = '#4f9a3a';
+  const colorOf = f => f.properties.color || kingdomOf(f)?.properties.color || (isDmz(f) && DMZ_COLOR) || KINDS[f.properties.kind].color;
 
   // ---- definizioni SVG condivise (tratteggio protettorati, bordo sfumato territori) ----
   const Defs = (() => {
@@ -68,7 +72,10 @@ const Render = (() => {
     switch (p.kind) {
       case 'marca': return { color: mix(c, '#ffffff', 0.3), weight: 2, opacity: 1, fillColor: c, fillOpacity: 0.36, dashArray: null, lineJoin: 'round' };
       case 'protettorato': return { color: mix(c, '#ffffff', 0.5), weight: 2.4, opacity: 1, dashArray: '0.1 6', lineCap: 'round', fillColor: Defs.hatch(c), fillOpacity: 1 };
-      case 'territorio': return { stroke: false, fillColor: c, fillOpacity: 0.34 };
+      case 'territorio': return !line ? { stroke: false, fillColor: c, fillOpacity: 0.34 }
+        // con la fascia la linea principale è sottile e tratteggiata, senza è una linea divisoria piena
+        : p.margin > 0 ? { color: mix(c, '#ffffff', 0.55), weight: 1.6, opacity: 0.95, dashArray: '8 6', lineCap: 'butt', fill: false }
+        : { color: c, weight: 3.5, opacity: 0.95, dashArray: null, lineCap: 'round', lineJoin: 'round', fill: false };
       case 'regione': return { color: c, weight: 1.6, opacity: 0.6, dashArray: '10 7', fillColor: c, fillOpacity: 0.04 };
       case 'continente': return { color: c, weight: 2, opacity: 0.4, dashArray: '1 9', lineCap: 'round', fillColor: c, fillOpacity: 0 };
       case 'acqua': return line
@@ -81,7 +88,7 @@ const Render = (() => {
     switch (f.properties.kind) {
       case 'marca': return { ...s, color: '#ffffff', weight: 3.5, fillOpacity: 0.58 };
       case 'protettorato': return { ...s, color: '#ffffff', weight: 3.2 };
-      case 'territorio': return { ...s, fillOpacity: 0.5 };
+      case 'territorio': return Geo.isLine(f.geometry) ? { ...s, weight: s.weight + 2 } : { ...s, fillOpacity: 0.5 };
       case 'regione': case 'continente': return { ...s, opacity: 0.95, weight: 2.6, fillOpacity: 0.1 };
       case 'acqua': return { ...s, weight: s.weight + 2, opacity: 1, fillOpacity: (s.fillOpacity || 0) + 0.12 };
     }
@@ -111,11 +118,8 @@ const Render = (() => {
     }
     // Valori tarati sulle dimensioni scelte a mano nelle mappe reali (quasi sempre sotto i 30 blocchi)
     if (!g) return 20;
-    if (g.type === 'Point') {
-      if (k === 'localita') return { capitale: 14, citta: 10, villaggio: 8, castello: 8, porto: 8, luogo: 6 }[p.subtype] || 9;
-      if (k === 'acqua') return { oceano: 100, mare: 70, golfo: 35, lago: 20, laguna: 20, baia: 20, stretto: 20, fiume: 10, torrente: 8, canale: 10 }[p.subtype] || 20;
-      return { continente: 120, regione: 50, territorio: 70 }[k] || 25;
-    }
+    // i punti sono solo località
+    if (g.type === 'Point') return { capitale: 14, citta: 10, villaggio: 8, castello: 8, porto: 8, luogo: 6 }[p.subtype] || 9;
     // cresce con la radice della lunghezza: sulle linee lunghe il nome si ripete invece di ingrandirsi
     if (Geo.isLine(g)) return clamp(Math.sqrt(Geo.lineAt(g, 0.5).length) * 0.6 / Math.max(1, len / 8), 4, 40);
     const b = Geo.bbox(g), w = b[2] - b[0];
@@ -236,13 +240,15 @@ const Render = (() => {
       it.shape = makeLabel(f, true, labelPlacements(f)[0]);
       it.pointShape = true;
     } else if (g && (Geo.isPoly(g) || Geo.isLine(g))) {
-      const opts = { pane: p.kind in PANES ? p.kind : 'marca', className: `pe-k-${p.kind}${p.kind === 'territorio' ? ' pe-soft' : ''}`,
-        ...baseStyle(f) };
+      const dmz = isDmz(f);
+      const opts = { pane: dmz ? 'dmz' : p.kind in PANES ? p.kind : 'marca',
+        className: `pe-k-${p.kind}${p.kind === 'territorio' && !dmz ? ' pe-soft' : ''}`, ...baseStyle(f) };
       it.shape = Geo.isPoly(g) ? L.polygon(Geo.toLatLngs(g), opts) : L.polyline(Geo.toLatLngs(g), opts);
     }
     if (it.shape) {
       it.shape.addTo(map);
       bindShape(it, id);
+      updateBand(it, f);
     }
     if (it.pointShape) {
       it.labels = [it.shape];
@@ -267,6 +273,24 @@ const Render = (() => {
     }
   }
 
+  // Fascia della DMZ: due tratti larghi quanto la fascia (spessore in pixel ricalcolato a ogni zoom),
+  // sotto il bordo chiaro e sopra il riempimento, in un pane semitrasparente
+  function updateBand(it, f) {
+    const m = isDmz(f) ? f.properties.margin || 0 : 0;
+    if (!m) { if (it.band) { it.band.forEach(l => l.remove()); it.band = null; } return; }
+    const c = colorOf(f), w = 2 * m * Math.pow(2, map.getZoom()), lls = Geo.toLatLngs(f.geometry);
+    const styles = [{ color: mix(c, '#ffffff', 0.5), weight: w + 4 }, { color: c, weight: w }];
+    if (it.band) { it.band.forEach((l, i) => { l.setLatLngs(lls); l.setStyle(styles[i]); }); return; }
+    it.band = styles.map((s, i) => L.polyline(lls, { pane: 'dmzBand', className: 'pe-k-territorio', opacity: 1, lineCap: 'round',
+      lineJoin: 'round', interactive: i === 1, pmIgnore: true, snapIgnore: true, ...s }).addTo(map));
+    // anche la fascia, non solo la linea, si evidenzia e si seleziona
+    const fill = it.band[1], id = it.id;
+    fill.on('mouseover', () => setHover(id));
+    fill.on('mouseout', () => { if (state.hover === id) setHover(null); });
+    fill.on('mousemove', e => hooks.hover(id, e.originalEvent));
+    fill.on('click', e => { L.DomEvent.stopPropagation(e); hooks.click(id, e); });
+  }
+
   // Etichette (non interattive) di aree, linee e regni; trascinandone una si fissa la posizione
   function addLabels(it, f) {
     it.labels = labelPlacements(f).map(pl => makeLabel(f, false, pl)).filter(Boolean);
@@ -286,6 +310,7 @@ const Render = (() => {
     if (!it) return;
     if (it.shape && it.shape.pm && it.shape.pm.enabled && it.shape.pm.enabled()) it.shape.pm.disable();
     if (it.shape) it.shape.remove();
+    if (it.band) it.band.forEach(l => l.remove());
     removeLabels(it);
     items.delete(id);
   }
@@ -294,6 +319,7 @@ const Render = (() => {
   function refresh(it, f) {
     it.size = f.properties.label.size || autoSize(f);
     it.show = f.properties.label.show !== false;
+    if (it.shape && !it.pointShape) updateBand(it, f);
     if (!it.pointShape) {
       const places = labelPlacements(f);
       if (places.length !== it.labels.length) {
@@ -464,6 +490,8 @@ const Render = (() => {
     map = m;
     for (const [name, z] of Object.entries(PANES)) map.createPane(name).style.zIndex = z;
     map.getPane('labels').style.pointerEvents = 'none';
+    map.getPane('dmzBand').style.opacity = 0.45;
+    map.on('zoomend', () => items.forEach(it => { if (it.band) updateBand(it, Store.get(it.id)); }));
     Defs.init();
     map.on('zoom', () => updateLabels());
     map.on('zoomanim', e => updateLabels(e.zoom));

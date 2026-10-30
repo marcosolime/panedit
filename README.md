@@ -48,6 +48,10 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   una nuova entità, per darle il nome.
 - **Ispettore a destra**: nome, tipo, regno, categoria, colore, etichetta (dimensione, rotazione, posizione),
   misure, note.
+- **DMZ** (Green Line, Blackline…): da **+ Nuovo territorio** → *DMZ (linea per punti)*, oppure con lo strumento
+  *Linea per punti* (D) e **Crea** su *Territorio*, si traccia la linea principale. Nasce come semplice linea divisoria; nell'ispettore il campo **Margine** (blocchi per lato)
+  la allarga in una fascia cuscinetto larga il doppio del margine. Il nome si ripete lungo la linea. Nel pannello
+  Territori le DMZ hanno un gruppo a parte.
 - **Sfondo**: in fondo al pannello di destra, accanto alla griglia dei chunk, gli slider di **luminosità** e
   **saturazione** scuriscono o spengono le tiles lasciando invariati confini, colori ed etichette (doppio clic
   per tornare al 100 %). Sono preferenze del browser e non finiscono nel file.
@@ -60,7 +64,8 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 | F | Area a mano libera (tieni premuto e disegna il contorno) |
 | P | Area per punti (clic sul primo punto o Invio per chiudere) |
 | L | Linea a mano libera (fiumi) |
-| K | Punto (località, o solo il nome di un mare, regione…) |
+| D | Linea per punti (DMZ, linee dritte): clic per i punti, due clic = linea dritta, Invio o clic sull'ultimo punto per finire |
+| K | Località (punto): è l'unico tipo di entità che si crea come punto |
 | B / E | Pennello / gomma: aggiunge o toglie area all'entità selezionata |
 | R | Ridisegna l'intero confine dell'entità selezionata |
 | Spazio | tenuto premuto, sposta la mappa mentre disegni |
@@ -123,11 +128,14 @@ gioco **[x, z] in blocchi** (z cresce verso sud), non latitudine/longitudine.
 | `regno` | `null` (l'estensione è l'unione delle sue marche) | `color` |
 | `marca` | Polygon / MultiPolygon | `kingdom` |
 | `protettorato` | Polygon / MultiPolygon | `kingdom` |
-| `territorio` | Polygon / MultiPolygon / Point | `color` (facoltativo) |
-| `regione` | Polygon / MultiPolygon / Point | `color` (facoltativo) |
-| `continente` | Polygon / MultiPolygon / Point | `color` (facoltativo) |
-| `acqua` | LineString / Polygon / Point | `subtype`: fiume, torrente, canale, lago, laguna, mare, oceano, golfo, baia, stretto |
+| `territorio` | Polygon / MultiPolygon / LineString | `color` (facoltativo) · `subtype`: `area`, oppure `dmz` per le linee · `margin` (solo DMZ) |
+| `regione` | Polygon / MultiPolygon | `color` (facoltativo) |
+| `continente` | Polygon / MultiPolygon | `color` (facoltativo) |
+| `acqua` | LineString / Polygon | `subtype`: fiume, torrente, canale, lago, laguna, mare, oceano, golfo, baia, stretto |
 | `localita` | Point | `subtype`: capitale, citta, villaggio, castello, porto, luogo · `kingdom` (facoltativo) |
+
+Un territorio LineString è una DMZ: `margin` è la distanza in blocchi della fascia cuscinetto da ciascun lato
+della linea (`0` = solo la linea). La categoria `area` / `dmz` si ricava dalla geometria.
 
 Proprietà comuni: `id` (univoco, usato come riferimento da `kingdom`), `name`, `notes`, `color`
 (`null` = automatico) e `label`:
@@ -142,4 +150,5 @@ Proprietà comuni: `id` (univoco, usato come riferimento da `kingdom`), `name`, 
 | `anchor` | solo località: `right`, `left`, `top`, `bottom` |
 
 Un file GeoJSON qualsiasi viene comunque aperto: le feature senza `kind` diventano località (punti),
-acque (linee) o marche (poligoni).
+acque (linee) o marche (poligoni). Lo stesso vale per una feature la cui geometria non è ammessa dal suo
+`kind`: per esempio un continente salvato come punto diventa una località di categoria `luogo`.

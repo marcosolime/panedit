@@ -6,6 +6,7 @@ const ICONS = (() => {
     freehand: s('<path d="M4 17c2-6 5-11 8-11s2 6 4 6 2.5-3 4-5"/><circle cx="4" cy="17" r="1.4" fill="currentColor"/>'),
     polygon: s('<path d="M5 8l7-4 7 5-2 9H7z"/><circle cx="5" cy="8" r="1.5"/><circle cx="12" cy="4" r="1.5"/><circle cx="19" cy="9" r="1.5"/><circle cx="17" cy="18" r="1.5"/><circle cx="7" cy="18" r="1.5"/>'),
     line: s('<path d="M3 18c3 0 3-4 6-4s3 4 6 4 3-8 6-12"/>'),
+    polyline: s('<path d="M4 18l6-9 5 5 5-9"/><circle cx="4" cy="18" r="1.5"/><circle cx="10" cy="9" r="1.5"/><circle cx="15" cy="14" r="1.5"/><circle cx="20" cy="5" r="1.5"/>'),
     point: s('<path d="M12 21s-6-5.5-6-11a6 6 0 0112 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>'),
     add: s('<path d="M14 4l6 6-9 9H5v-6z"/><path d="M5 3v4M3 5h4"/>'),
     sub: s('<path d="M8 20h12"/><path d="M15.5 4.5l4 4L10 18H6l-2-2 9.5-9.5"/><path d="M11 7l6 6"/>'),

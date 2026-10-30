@@ -320,8 +320,9 @@ const UI = (() => {
     const geoms = KINDS[k].geom;
     const opts = [];
     if (geoms.includes('Polygon')) opts.push(['freehand', 'Area a mano libera', 'F'], ['polygon', 'Area per punti', 'P']);
-    if (geoms.includes('LineString')) opts.push(['line', 'Linea a mano libera (fiume)', 'L']);
-    if (geoms.includes('Point')) opts.push(['point', k === 'localita' ? 'Punto sulla mappa' : 'Solo il nome (punto)', 'K']);
+    if (k === 'territorio') opts.push(['polyline', 'DMZ (linea per punti)', 'D']);
+    else if (geoms.includes('LineString')) opts.push(['line', 'Linea a mano libera (fiume)', 'L'], ['polyline', 'Fiume o canale per punti', 'D']);
+    if (geoms.includes('Point')) opts.push(['point', 'Punto sulla mappa', 'K']);
     if (opts.length === 1) { Tools.set(opts[0][0]); return; }
     menu(anchor, opts.map(([t, label, key]) => ({ label, key, icon: ICONS[t], fn: () => Tools.set(t) })));
   }
@@ -355,7 +356,7 @@ const UI = (() => {
 
   // ---------------------------------------------------------------- barra strumenti
   function buildToolstrip() {
-    const tools = ['select', 'freehand', 'polygon', 'line', 'point', null, 'add', 'sub', 'redraw'];
+    const tools = ['select', 'freehand', 'polygon', 'line', 'polyline', 'point', null, 'add', 'sub', 'redraw'];
     $('#tsTools').innerHTML = tools.map(t => t ? `<button class="tool" data-tool="${t}" title="${esc(Tools.META[t].name)} (${Tools.META[t].key})">${ICONS[t]}</button>` : '<span class="ts-sep"></span>').join('');
     $('#tsTools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) Tools.set(b.dataset.tool); });
     $('#optTarget').innerHTML = KIND_ORDER.filter(k => k !== 'regno').map(k => `<option value="${k}">${esc(KINDS[k].label)}</option>`).join('');
@@ -509,7 +510,8 @@ const UI = (() => {
         <option value="">— nessuno —</option>${kingdoms().map(x => `<option value="${esc(x.id)}"${x.id === p.kingdom ? ' selected' : ''}>${esc(x.properties.name)}</option>`).join('')}
         <option value="__new">+ Nuovo regno…</option></select></div>`);
     }
-    if (K.subtypes) {
+    // territori: la categoria (area / DMZ) dipende dalla geometria e non si sceglie
+    if (K.subtypes && p.kind !== 'territorio') {
       h += field('Categoria', `<select data-p="subtype">${Object.entries(K.subtypes).map(([v, l]) => `<option value="${v}"${v === p.subtype ? ' selected' : ''}>${esc(l)}</option>`).join('')}</select>`);
     }
     if (p.kind === 'regno') {
@@ -518,6 +520,12 @@ const UI = (() => {
     } else if (!K.hasKingdom || !k) {
       h += field('Colore', `<div class="colors"><input type="color" data-p="color" value="${color}">
         ${p.color ? `<button class="link" data-act="color-auto">automatico</button>` : '<span class="muted">automatico</span>'}</div>`);
+    }
+    if (p.subtype === 'dmz') {
+      const m = p.margin || 0;
+      h += `<div class="fld"><span class="fl">Margine <em id="dmzWidth">${m ? `fascia larga ${nf(2 * m)} blocchi` : 'solo la linea'}</em></span>
+        <div class="rng"><input type="number" class="num" data-m="margin" min="0" max="5000" step="1" value="${m}">
+        <span class="muted">blocchi per lato</span></div></div>`;
     }
     h += '</section>';
 
@@ -595,8 +603,8 @@ const UI = (() => {
 
   function inspectorOverview() {
     const counts = KIND_ORDER.map(k => `<div><b>${Store.all(k).length}</b><span>${esc(KINDS[k].plural.toLowerCase())}</span></div>`).join('');
-    const keys = [['V', 'Seleziona e modifica confini'], ['F', 'Area a mano libera'], ['P', 'Area per punti'], ['L', 'Fiume a mano libera'],
-      ['K', 'Punto / località'], ['B', 'Pennello: aggiungi area'], ['E', 'Gomma: togli area'], ['R', 'Ridisegna confine'],
+    const keys = [['V', 'Seleziona e modifica confini'], ['F', 'Area a mano libera'], ['P', 'Area per punti'], ['L', 'Fiume a mano libera'], ['D', 'Linea per punti (DMZ)'],
+      ['K', 'Località'], ['B', 'Pennello: aggiungi area'], ['E', 'Gomma: togli area'], ['R', 'Ridisegna confine'],
       ['Spazio', 'Tieni premuto per spostare la mappa'], ['Esc', 'Annulla / deseleziona'], ['Canc', 'Elimina la selezione'],
       ['Z', 'Centra la selezione'], ['G', 'Griglia dei chunk'], ['[ / ]', 'Chiudi / apri i pannelli laterali'], ['Ctrl+Z / Ctrl+Y', 'Annulla / ripeti'], ['Ctrl+S', 'Salva'], ['Ctrl+K', 'Cerca'], ['1 – 8', 'Cambia pannello']];
     return `<div class="ins-head plain"><div class="ins-kind"><span>Nessuna selezione</span></div></div>
@@ -625,12 +633,17 @@ const UI = (() => {
         }
         upd(p => {
           if (prop === 'name') p.name = v.trim() || p.name;
-          else if (prop === 'kind') { p.kind = v; if (!KINDS[v].hasKingdom) p.kingdom = null; if (!KINDS[v].subtypes) p.subtype = null; else if (!KINDS[v].subtypes[p.subtype]) p.subtype = Object.keys(KINDS[v].subtypes)[0]; }
+          else if (prop === 'kind') { p.kind = v; if (!KINDS[v].hasKingdom) p.kingdom = null; Model.fitProps(p, Store.get(id).geometry); }
           else if (prop === 'kingdom') p.kingdom = v || null;
           else if (prop === 'notes') p.notes = v;
           else p[prop] = v;
         }, { label: { name: 'Rinomina', kind: 'Cambia tipo', kingdom: 'Assegna regno', color: 'Colore', subtype: 'Categoria', notes: 'Note' }[prop] });
         if (prop === 'kind') showPanel(v);
+      } else if (t.dataset.m) {
+        // a fine digitazione: margine intero e non negativo
+        const m = Math.max(0, Math.round(+t.value || 0));
+        t.value = m;
+        setMargin(m);
       } else if (t.dataset.l) {
         const l = t.dataset.l;
         if (l === 'size') return;   // già applicata durante il trascinamento (evento input)
@@ -664,9 +677,17 @@ const UI = (() => {
       const auto = el.querySelector('[data-l="sizeAuto"]'); if (auto) auto.checked = false;
     }
 
+    // margine della DMZ: la fascia si aggiorna mentre si cambia il valore, un solo passo di annullamento
+    function setMargin(m) {
+      const id = cur();
+      $('#dmzWidth').textContent = m ? `fascia larga ${nf(2 * m)} blocchi` : 'solo la linea';
+      upd(p => { p.margin = m; }, { quiet: true, source: 'edit', coalesce: 'margin:' + id, label: 'Margine DMZ' });
+    }
+
     // cursori e campo della dimensione: anteprima dal vivo, un solo passo di annullamento
     el.addEventListener('input', e => {
       const t = e.target, id = cur();
+      if (id && t.dataset.m) { const m = +t.value; if (t.value !== '' && m >= 0) setMargin(Math.round(m)); return; }
       if (!id || (t.type !== 'range' && t.dataset.l !== 'sizeNum')) return;
       if (t.dataset.l === 'size' || t.dataset.l === 'sizeNum') {
         const v = +t.value;
@@ -835,7 +856,7 @@ const UI = (() => {
 
   // ---------------------------------------------------------------- scorciatoie
   function bindKeys() {
-    const TOOLKEYS = { v: 'select', f: 'freehand', p: 'polygon', l: 'line', k: 'point', b: 'add', e: 'sub', r: 'redraw' };
+    const TOOLKEYS = { v: 'select', f: 'freehand', p: 'polygon', l: 'line', d: 'polyline', k: 'point', b: 'add', e: 'sub', r: 'redraw' };
     document.addEventListener('keydown', e => {
       const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
       if (mod && key === 's') { e.preventDefault(); command(e.shiftKey ? 'saveas' : 'save'); return; }

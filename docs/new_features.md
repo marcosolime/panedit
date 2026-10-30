@@ -1,7 +1,7 @@
 # Nuove funzioni (richieste di Raj)
 
 Piano per quattro modifiche all'editor chieste da Raj.
-Stato: **fasi 0–2 completate**, fasi 3–5 da fare (31/10/2026).
+Stato: **fasi 0–3 completate**, fasi 4–5 da fare (31/10/2026).
 
 > - Protettorato, inclusione di più regni (es. Avalon-Papasan) con mix di colori se 2 regni ne fanno parte
 > - Creazione di linee di confine tipo dmz, vedi Green Line o Blackline (aggiungerei una categoria sotto territori
@@ -149,30 +149,47 @@ Vale per tutte le entità.
 **Fatta quando**: si impostano con lo slider valori come 3, 4,5, 7 senza fatica; il campo numerico e lo slider
 restano allineati; le etichette in "auto" della mappa di prova sono vicine a quelle scelte a mano.
 
-### Fase 3: DMZ (linea con margine)
+### Fase 3: DMZ (linea con margine) ✔
 
-- **Modello**: `subtypes: { area, dmz }`, `LineString` tra le geometrie di `territorio`, campo `margin` con
-  default `0` in `make` / `normalize` / `Store.load`. Una LineString è ammessa solo con `subtype: 'dmz'`.
-- **Strumento linea per punti**: clic, clic, Invio (o doppio clic) per finire; con due clic si ottiene un
-  segmento dritto. Oggi lo strumento `L` è solo a mano libera e `targetKind` / `createLine`
-  ([tools.js](../viewer/js/tools.js)) mandano ogni linea su `acqua`: vanno generalizzati in base al menu **Crea**
-  (Territorio → DMZ). Lo stesso strumento serve alla fase 1 delle ferrovie: va scritto una volta sola.
+- **Modello** ([model.js](../viewer/js/model.js)): `territorio` accetta `LineString` e ha
+  `subtypes: { area, dmz }`. La categoria non si sceglie: la ricava `Model.fitProps` dalla geometria (linea = DMZ),
+  sia alla creazione sia all'apertura dei file e al cambio di tipo nell'ispettore. Le DMZ hanno `margin`
+  (blocchi per lato, default `0`); sugli altri territori il campo non c'è. I file esistenti si aprono come prima
+  (i territori ricevono `subtype: 'area'`).
+- **Strumento Linea per punti** (tasto **D**, [tools.js](../viewer/js/tools.js)): disegno per punti di
+  Leaflet-Geoman, con aggancio; due clic = linea dritta; clic sull'ultimo punto o Invio per finire.
+  `targetKind` / `createLine` hanno un ripiego per le linee: con **Crea** su un tipo che non accetta linee, la
+  linea a mano libera (L) diventa un fiume e quella per punti (D) una DMZ. Lo strumento è generico e servirà
+  anche alle ferrovie.
 - **Resa** ([render.js](../viewer/js/render.js)):
-  - `margin = 0`: linea divisoria piena, spessa e riconoscibile, col colore del campo `color`;
-  - `margin > 0`: la mappa usa `CRS.Simple` (1 unità = 1 blocco), quindi la fascia è una polyline con
-    `weight = 2 · margin · 2^zoom` pixel, ricalcolato a ogni zoom. Due tratti sovrapposti: sotto un bordo più
-    scuro largo 2–3 px in più, sopra il riempimento semitrasparente; al centro resta la linea principale,
-    sottile e tratteggiata.
-  - Niente `turf.buffer`: lavora in coordinate geografiche e con z in blocchi le latitudini escono da ±90°.
-- **Nome**: lungo la linea principale, con le ripetizioni della fase 2 (crescono con la lunghezza).
-- **Ispettore**: campo numerico **Margine (blocchi)** con frecce ± (passo 1, minimo 0), visibile solo per le DMZ;
-  la fascia si aggiorna mentre si cambia il valore. Misure: lunghezza della linea.
-- **Sovrapposizioni**: la DMZ non è un'entità politica, quindi non ritaglia e non viene ritagliata dalle marche;
-  si disegna sopra di esse.
+  - `margin = 0`: linea divisoria piena, spessa 3,5 px, nel colore della DMZ (default verde `#4f9a3a`,
+    modificabile);
+  - `margin > 0`: la linea principale diventa sottile, chiara e tratteggiata; sotto, la fascia è fatta di due
+    polyline larghe `2 · margin · 2^zoom` px (bordo chiaro + riempimento) nel pane `dmzBand` al 45 % di opacità,
+    ricalcolate a ogni `zoomend`. Estremità e angoli arrotondati: equivale a un buffer vero, senza `turf.buffer`.
+  - Pane propri (`dmzBand`, `dmz`) sopra le marche. Anche la fascia si evidenzia e si seleziona col clic.
+- **Nome**: lungo la linea principale, con le ripetizioni della fase 2.
+- **Ispettore** ([ui.js](../viewer/js/ui.js)): campo **Margine** (blocchi per lato, frecce ±1) con l'indicazione
+  "fascia larga N blocchi" / "solo la linea"; la fascia si aggiorna mentre si cambia il valore, in un solo passo
+  di annullamento. Per i territori non compare il menu Categoria. Misure: lunghezza e vertici.
+- **Pannello Territori**: le righe sono divise nei gruppi *Area* e *DMZ*.
+- **Sovrapposizioni**: la DMZ non è un'entità politica, quindi non ritaglia e non viene ritagliata dalle marche.
 
 **Fatta quando**: si traccia una DMZ con due clic, nasce come linea, portando il margine a 20 diventa una fascia
 larga 40 blocchi a ogni zoom (verificabile con la griglia dei chunk), il nome si ripete lungo la linea, e il file
 salvato e riaperto è identico.
+
+### Fase 3b: punti solo per le località ✔
+
+Richiesta emersa durante i lavori: un punto (strumento K) ha senso solo come località, non come territorio,
+regione, continente o specchio d'acqua.
+
+- `Point` tolto dalle geometrie di `territorio`, `regione`, `continente` e `acqua` ([model.js](../viewer/js/model.js)).
+  Lo strumento K crea sempre una località; nel menu "+ Nuovo" degli altri tipi non compare più "Solo il nome (punto)".
+- I nomi di mari e oceani vanno sull'area: l'etichetta si posiziona da sola al centro e si può trascinare.
+- **File esistenti**: `normalize` porta le feature con una geometria non ammessa dal loro `kind` al tipo adatto
+  alla geometria; i punti diventano località di categoria `luogo`, con nome ed etichetta conservati.
+  Nelle mappe attuali non ce ne sono.
 
 ### Fase 4: protettorato condiviso
 

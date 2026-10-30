@@ -57,9 +57,11 @@ const Edit = (() => {
     }
   }
 
-  function targetKind(want, geomType) {
+  // Tipo dell'entità creata: quello scelto in "Crea" se accetta la geometria, altrimenti un ripiego
+  // (le linee a mano libera diventano fiumi, quelle per punti DMZ)
+  function targetKind(want, geomType, lineFallback = 'acqua') {
     if (KINDS[want] && KINDS[want].geom.includes(geomType)) return want;
-    return geomType === 'Point' ? 'localita' : geomType === 'LineString' ? 'acqua' : 'marca';
+    return geomType === 'Point' ? 'localita' : geomType === 'LineString' ? lineFallback : 'marca';
   }
 
   function baseProps(kind) {
@@ -79,9 +81,9 @@ const Edit = (() => {
     return f.id;
   }
 
-  function createLine(want, line) {
-    const kind = targetKind(want, 'LineString');
-    const f = Model.make(kind, kind === 'acqua' ? { subtype: 'fiume' } : {}, line);
+  function createLine(want, line, fallback) {
+    const kind = targetKind(want, 'LineString', fallback);
+    const f = Model.make(kind, {}, line);
     Store.put(f, { label: `Crea ${KINDS[kind].label.toLowerCase()}` });
     Store.commit();
     return f.id;
@@ -89,9 +91,7 @@ const Edit = (() => {
 
   function createPoint(want, pos) {
     const kind = targetKind(want, 'Point');
-    const props = baseProps(kind);
-    if (kind === 'acqua') props.subtype = 'mare';
-    const f = Model.make(kind, props, { type: 'Point', coordinates: pos });
+    const f = Model.make(kind, baseProps(kind), { type: 'Point', coordinates: pos });
     Store.put(f, { label: `Crea ${KINDS[kind].label.toLowerCase()}` });
     Store.commit();
     return f.id;
@@ -245,7 +245,8 @@ const Tools = (() => {
     freehand: { key: 'F', name: 'Area a mano libera' },
     polygon:  { key: 'P', name: 'Area per punti' },
     line:     { key: 'L', name: 'Linea a mano libera (fiumi)' },
-    point:    { key: 'K', name: 'Punto (località, etichette)' },
+    polyline: { key: 'D', name: 'Linea per punti (DMZ, linee dritte)' },
+    point:    { key: 'K', name: 'Località (punto)' },
     add:      { key: 'B', name: "Pennello: aggiungi all'area selezionata" },
     sub:      { key: 'E', name: "Gomma: togli dall'area selezionata" },
     redraw:   { key: 'R', name: "Ridisegna il confine dell'area selezionata" }
@@ -257,7 +258,8 @@ const Tools = (() => {
   };
 
   function hint() {
-    const kindOf = g => KINDS[Edit.targetKind(Settings.target, g)].label.toLowerCase();
+    const kindOf = (g, fb) => KINDS[Edit.targetKind(Settings.target, g, fb)].label.toLowerCase();
+    const dmz = Edit.targetKind(Settings.target, 'LineString', 'territorio') === 'territorio';
     const sel = selectedArea();
     const name = sel ? `«${sel.properties.name}»` : '';
     switch (tool) {
@@ -267,7 +269,8 @@ const Tools = (() => {
       case 'freehand': return `Tieni premuto e disegna il contorno: nuova ${kindOf('Polygon')} · Spazio + trascina per spostare la mappa · Esc per annullare`;
       case 'polygon': return `Clic per aggiungere i vertici della nuova ${kindOf('Polygon')} · clic sul primo vertice o Invio per chiudere · Esc per annullare`;
       case 'line': return `Tieni premuto e disegna il corso del fiume · Spazio + trascina per spostare la mappa`;
-      case 'point': return `Clic sulla mappa per posizionare: ${kindOf('Point')}`;
+      case 'polyline': return `Clic per aggiungere i punti ${dmz ? 'della DMZ' : `della linea (${kindOf('LineString', 'territorio')})`} · due clic = linea dritta · clic sull'ultimo punto o Invio per finire · Esc per annullare`;
+      case 'point': return 'Clic sulla mappa per posizionare la nuova località';
       case 'add': return `Disegna l'area da aggiungere a ${name} · Spazio + trascina per spostare la mappa · Esc per finire`;
       case 'sub': return `Disegna l'area da togliere a ${name} · Spazio + trascina per spostare la mappa · Esc per finire`;
       case 'redraw': return `Disegna il nuovo confine completo di ${name}`;
@@ -295,6 +298,13 @@ const Tools = (() => {
         templineStyle: { color: '#ffffff', weight: 2 },
         hintlineStyle: { color: '#ffffff', weight: 1.5, dashArray: '5 5' },
         pathOptions: { color: '#ffffff', weight: 2, fillOpacity: 0.15 }
+      });
+    } else if (t === 'polyline') {
+      map.pm.enableDraw('Line', {
+        snappable: Settings.snap, snapDistance: 14, continueDrawing: false,
+        templineStyle: { color: '#ffffff', weight: 2 },
+        hintlineStyle: { color: '#ffffff', weight: 1.5, dashArray: '5 5' },
+        pathOptions: { color: '#ffffff', weight: 2 }
       });
     }
     UI.onTool(t);
@@ -393,6 +403,12 @@ const Tools = (() => {
       swallowNextClick();
       const g = Geo.fromLayer(e.layer);
       e.layer.remove();
+      if (e.shape === 'Line') {
+        const id = g && g.coordinates.length >= 2 && Edit.createLine(Settings.target, g, 'territorio');
+        set('select');
+        if (id) UI.select(id, { focus: true });
+        return;
+      }
       const poly = Geo.fix(g);
       const id = poly && Edit.createArea(Settings.target, poly);
       set('select');
@@ -411,8 +427,12 @@ const Tools = (() => {
     set('select');
   }
 
+  // Invio: chiude l'area o termina la linea che si sta disegnando per punti
   function finishPolygon() {
-    try { if (tool === 'polygon') map.pm.Draw.Polygon._finishShape(); } catch { /* meno di 3 vertici */ }
+    try {
+      if (tool === 'polygon') map.pm.Draw.Polygon._finishShape();
+      else if (tool === 'polyline') map.pm.Draw.Line._finishShape();
+    } catch { /* troppo pochi punti */ }
   }
 
   return { init, set, escape, hint, finishPolygon, META, get tool() { return tool; } };

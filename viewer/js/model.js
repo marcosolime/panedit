@@ -3,6 +3,7 @@
 // File GeoJSON (FeatureCollection). Ogni Feature ha properties:
 //   id, kind ('regno' | 'marca' | 'protettorato' | 'territorio' | 'regione' | 'continente' | 'acqua' | 'localita'),
 //   name, kingdom (id del regno, per marche/protettorati/località), subtype, color, notes,
+//   margin (solo territori DMZ: blocchi per lato dalla linea principale),
 //   label: { show, size (blocchi, null = automatica), rotation (gradi, null = automatica), pos ([x, z], null = automatica),
 //            showKingdom, anchor (solo località) }
 // I regni sono Feature con geometry null: la loro estensione è l'unione delle loro marche.
@@ -18,21 +19,23 @@ const KINDS = {
     label: 'Protettorato', plural: 'Protettorati', article: 'Nuovo protettorato', geom: ['Polygon', 'MultiPolygon'],
     political: true, hasKingdom: true, color: '#8f969c'
   },
+  // Un territorio tracciato come linea è una DMZ (linea di confine con una fascia cuscinetto larga 2 × margin)
   territorio: {
-    label: 'Territorio', plural: 'Territori', article: 'Nuovo territorio', geom: ['Polygon', 'MultiPolygon', 'Point'],
-    color: '#26331b', labelColor: '#2f3d22', labelStroke: '#b9c79a'
+    label: 'Territorio', plural: 'Territori', article: 'Nuovo territorio', geom: ['Polygon', 'MultiPolygon', 'LineString'],
+    color: '#26331b', labelColor: '#2f3d22', labelStroke: '#b9c79a',
+    subtypes: { area: 'Area', dmz: 'DMZ' }
   },
   regione: {
-    label: 'Regione', plural: 'Regioni', article: 'Nuova regione', geom: ['Polygon', 'MultiPolygon', 'Point'],
+    label: 'Regione', plural: 'Regioni', article: 'Nuova regione', geom: ['Polygon', 'MultiPolygon'],
     color: '#e8dcb0'
   },
   continente: {
-    label: 'Continente', plural: 'Continenti', article: 'Nuovo continente', geom: ['Polygon', 'MultiPolygon', 'Point'],
+    label: 'Continente', plural: 'Continenti', article: 'Nuovo continente', geom: ['Polygon', 'MultiPolygon'],
     color: '#ffffff'
   },
   acqua: {
     label: "Specchio d'acqua", plural: 'Acque', article: "Nuovo specchio d'acqua",
-    geom: ['Point', 'LineString', 'MultiLineString', 'Polygon', 'MultiPolygon'], color: '#5fb4ff',
+    geom: ['LineString', 'MultiLineString', 'Polygon', 'MultiPolygon'], color: '#5fb4ff',
     subtypes: { fiume: 'Fiume', torrente: 'Torrente', canale: 'Canale', lago: 'Lago', laguna: 'Laguna', mare: 'Mare',
       oceano: 'Oceano', golfo: 'Golfo', baia: 'Baia', stretto: 'Stretto' }
   },
@@ -69,9 +72,20 @@ const Model = (() => {
     const id = newId(kind, name);
     const p = { id, kind, name, kingdom: null, subtype: null, color: null, notes: '', label: defaultLabel(kind), ...props };
     if (kind === 'regno' && !p.color) p.color = nextColor();
-    if (kind === 'acqua' && !p.subtype) p.subtype = geometry?.type?.includes('Line') ? 'fiume' : 'lago';
-    if (kind === 'localita' && !p.subtype) p.subtype = 'citta';
+    fitProps(p, geometry);
     return { type: 'Feature', id, properties: p, geometry };
+  }
+
+  // Categoria (e margine delle DMZ) coerenti con tipo e geometria. Per i territori la categoria
+  // dipende solo dalla geometria: linea = DMZ, altrimenti area.
+  function fitProps(p, g) {
+    const S = KINDS[p.kind].subtypes, line = !!g && g.type.includes('Line');
+    if (!S) p.subtype = null;
+    else if (p.kind === 'territorio') p.subtype = line ? 'dmz' : 'area';
+    else if (!S[p.subtype]) p.subtype = p.kind === 'acqua' ? (line ? 'fiume' : 'lago') : p.kind === 'localita' ? 'citta' : Object.keys(S)[0];
+    if (p.subtype === 'dmz') p.margin = Math.max(0, +p.margin || 0);
+    else delete p.margin;
+    return p;
   }
 
   function nextColor() {
@@ -84,7 +98,14 @@ const Model = (() => {
     const p = { ...(f.properties || {}) };
     const g = f.geometry || null;
     let kind = p.kind;
-    if (!KINDS[kind]) kind = !g ? 'regno' : g.type === 'Point' ? 'localita' : g.type.includes('Line') ? 'acqua' : 'marca';
+    // tipo sconosciuto, o geometria non ammessa dal tipo (es. un continente salvato come punto): si sceglie
+    // in base alla geometria. I punti sono sempre località; quelli convertiti diventano "luoghi".
+    const byGeom = () => g.type === 'Point' ? 'localita' : g.type.includes('Line') ? 'acqua' : 'marca';
+    if (!KINDS[kind]) kind = !g ? 'regno' : byGeom();
+    else if (g && kind !== 'regno' && !KINDS[kind].geom.includes(g.type)) {
+      kind = byGeom();
+      p.subtype = kind === 'localita' ? 'luogo' : null;
+    }
     const name = p.name ?? p.Name ?? p.NAME ?? p.nome ?? '';
     const id = p.id || f.id || newId(kind, name);
     const props = {
@@ -92,6 +113,7 @@ const Model = (() => {
       ...p, id, kind, name,
       label: { ...defaultLabel(kind), ...(p.label || {}) }
     };
+    fitProps(props, g);
     return { type: 'Feature', id, properties: props, geometry: g ? { type: g.type, coordinates: g.coordinates } : null };
   }
 
@@ -113,7 +135,7 @@ const Model = (() => {
     };
   }
 
-  return { clone, make, normalize, toFeatureCollection, nextColor, newId };
+  return { clone, make, fitProps, normalize, toFeatureCollection, nextColor, newId };
 })();
 
 // Store: tutte le entità, raggruppamento delle modifiche in transazioni, annulla/ripeti.
