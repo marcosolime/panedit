@@ -437,3 +437,23 @@ body.file-over #dropOverlay { display: flex; }
   #app { --rail-w: 60px; --panel-w: 250px; --ins-w: 300px; }
   .brand span, .tb span { display: none; }
 }
+
+/* ---------------------------------------------------------------- schema della rete (ferrovie) */
+#schemaView { position: fixed; inset: 0; z-index: 3000; display: flex; flex-direction: column; background: var(--bg); }
+#schemaView[hidden] { display: none; }
+.sv-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.sv-bar .grow { flex: 1; }
+.sv-body { flex: 1; min-height: 0; overflow: auto; padding: 20px; display: flex; }
+.sv-body svg { margin: auto; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.45); }
+
+/* stampa (Esporta PDF): solo lo schema, su un foglio A3 orizzontale */
+@media print {
+  @page { size: A3 landscape; margin: 10mm; }
+  body.schema-open > *:not(#schemaView) { display: none !important; }
+  html, body.schema-open { height: auto; }
+  body.schema-open { background: #fff; overflow: visible; }
+  body.schema-open #schemaView { position: static; background: #fff; }
+  body.schema-open .sv-bar { display: none; }
+  body.schema-open .sv-body { padding: 0; overflow: visible; }
+  body.schema-open .sv-body svg { width: 100%; height: auto; max-height: 277mm; box-shadow: none; border-radius: 0; }
+}

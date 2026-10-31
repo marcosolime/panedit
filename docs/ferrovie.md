@@ -1,7 +1,7 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **fasi 1–4 completate** (il formato del file è stabile dalla fase 2); fasi 5–6 da fare (31/10/2026). Le nuove
+Stato: **fasi 1–5 completate** (il formato del file è stabile dalla fase 2); fase 6 (facoltativa) da fare (31/10/2026). Le nuove
 funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
@@ -249,7 +249,28 @@ coincidono con `Geo.length`.
 **Fatta quando**: sulla rete di prova i risultati coincidono con quelli calcolati a mano, compreso un percorso su
 una linea circolare in cui conviene il verso "all'indietro".
 
-### Fase 5: schema ottilineare ed esportazione
+### Fase 5: schema ottilineare ed esportazione ✔
+
+**Fatta** (31/10/2026), da verificare sulla rete vera (criterio A3 qui sotto). [schema.js](../viewer/js/schema.js):
+- *Rete*: linee con almeno due fermate, stazioni servite; un tratto per coppia di stazioni consecutive, con
+  l'elenco delle linee che lo percorrono.
+- *Disposizione* (`layout`): coordinate reali scalate (tratto mediano = 5 unità di griglia); direzione reale di ogni
+  tratto arrotondata a 45°; 240 giri di aggiustamento (le stazioni di ogni tratto si portano sulla direzione voluta,
+  quelle a meno di 3 unità si respingono); allineamento alla griglia, con le stazioni sovrapposte spostate nella
+  cella libera più vicina.
+- *Tracciati* (`octiPath`): ogni tratto è dritto se già a 0°/45°/90°, altrimenti ha **una sola curva** (diagonale +
+  dritto): l'ottilinearità è garantita anche quando la disposizione non riesce ad allineare due stazioni, e gli
+  anelli restano poligoni chiusi. Le linee che condividono un tratto sono affiancate (`offset`, 8 px).
+- *Disegno*: linee spesse con angoli arrotondati (direttissime più spesse), fermate come pallini bordati del colore
+  della linea, interscambi come cerchi bianchi bordati di nero (più larghi se ci passano linee affiancate), nomi
+  orizzontali in una delle 8 posizioni attorno alla stazione scelta per coprire meno linee, cerchi e altri nomi (negli
+  anelli preferibilmente all'esterno), titolo e legenda per categoria.
+- *Esportazione* ([ui.js](../viewer/js/ui.js), `openSchema`): anteprima a tutto schermo; *Esporta SVG* scarica
+  `panera_ferrovie_AAAA-MM-GG.svg`; *Esporta PDF* usa la stampa del browser con un foglio di stile `@media print`
+  (A3 orizzontale, solo lo schema). Nessuna libreria.
+- Non fatto: nomi a 45° (per ora sempre orizzontali) e garanzia di anelli senza incroci (l'euristica di solito li
+  evita; i casi rimasti si sistemano con la vista Schema della fase 6).
+
 
 - Nuovo modulo `viewer/js/schema.js`.
 - **Disposizione automatica** (euristica, sufficiente per alcune decine di stazioni):
@@ -290,7 +311,7 @@ Wolff, programmazione lineare intera); qui non serve, ma è utile se le euristic
 | [viewer/js/ui.js](../viewer/js/ui.js): pannello, ispettori, calcolatore di percorso, esportazione | 1, 3, 4, 5 |
 | [viewer/js/icons.js](../viewer/js/icons.js), [viewer/index.html](../viewer/index.html), [viewer/css/editor.css](../viewer/css/editor.css) | 1, 4, 5 |
 | [viewer/js/rail.js](../viewer/js/rail.js): fermate, regola di unicità (fase 2); segmenti, grafo, Dijkstra | 2, 3, 4 |
-| `viewer/js/schema.js` (nuovo): disposizione ottilineare, SVG, PDF | 5, 6 |
+| [viewer/js/schema.js](../viewer/js/schema.js): disposizione ottilineare, SVG, PDF | 5, 6 |
 | [README.md](../README.md) | ogni fase |
 
 Il progetto resta com'è: JavaScript puro senza compilazione, librerie copiate in locale in `viewer/lib/`.

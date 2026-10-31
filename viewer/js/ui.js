@@ -172,7 +172,8 @@ const UI = (() => {
 
   // ---- calcolatore di percorso (pannello Ferrovie) ----
   const route = { from: '', to: '', shown: false };
-  const ROUTE_BOX = `<div class="route" id="rtBox">
+  const ROUTE_BOX = `<button class="btn-new" data-act="schema">${ICONS.ferrovia}<span>Schema della rete (SVG / PDF)</span></button>
+    <div class="route" id="rtBox">
       <div class="route-sel"><select id="rtFrom" data-route="from"></select>
         <button class="ib sm" data-act="route-swap" title="Scambia partenza e arrivo">⇅</button></div>
       <div class="route-sel"><select id="rtTo" data-route="to"></select>
@@ -207,6 +208,46 @@ const UI = (() => {
         <em>${fmtLen(l.length)}</em></div><div class="leg-b">${stn(l.from)} → ${stn(l.to)} · ${l.stops} ${l.stops === 1 ? 'fermata' : 'fermate'}</div></li>`).join('');
     return `<div class="rt-head"><div class="stats"><div><b>${nf(r.length / 1000, 2)} km</b><span>${nf(Math.round(r.length))} blocchi</span></div>
       <div><b>${r.changes}</b><span>${r.changes === 1 ? 'cambio' : 'cambi'}</span></div></div>${close}</div><ol class="legs">${legs}</ol>`;
+  }
+
+  // ---- schema della rete: anteprima a tutto schermo, esportazione SVG e PDF (stampa del browser, A3) ----
+  function openSchema() {
+    const svg = Schema.build();
+    if (!svg) { toast('Lo schema richiede almeno una linea con due fermate', 'warn'); return; }
+    let view = $('#schemaView');
+    if (!view) {
+      view = document.createElement('div');
+      view.id = 'schemaView';
+      view.innerHTML = `<div class="sv-bar"><b>Schema della rete</b><span class="muted">linee a 0°, 45° e 90° · disposizione automatica</span>
+        <span class="grow"></span>
+        <button class="btn" data-sv="svg">${ICONS.saveas}<span>Esporta SVG</span></button>
+        <button class="btn" data-sv="pdf">${ICONS.file}<span>Esporta PDF</span></button>
+        <button class="ib" data-sv="close" title="Chiudi (Esc)">${ICONS.close}</button></div><div class="sv-body" id="svBody"></div>`;
+      document.body.appendChild(view);
+      view.addEventListener('click', e => {
+        const a = e.target.closest('[data-sv]')?.dataset.sv;
+        if (a === 'close') closeSchema();
+        else if (a === 'svg') {
+          const d = new Date(), pad = n => String(n).padStart(2, '0');
+          download(`panera_ferrovie_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.svg`, $('#svBody').innerHTML, 'image/svg+xml');
+        } else if (a === 'pdf') window.print();   // "Salva come PDF" nella finestra di stampa; formato A3 orizzontale
+      });
+    }
+    $('#svBody').innerHTML = svg;
+    view.hidden = false;
+    document.body.classList.add('schema-open');
+  }
+  function closeSchema() {
+    const view = $('#schemaView');
+    if (view) view.hidden = true;
+    document.body.classList.remove('schema-open');
+  }
+  function download(name, text, type) {
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([text], { type }));
+    a.download = name;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   }
 
   const DESCRIPTIONS = {
@@ -297,6 +338,7 @@ const UI = (() => {
     const el = $('#panel');
     el.addEventListener('click', e => {
       const act = e.target.closest('[data-act]');
+      if (act?.dataset.act === 'schema') { openSchema(); return; }
       if (act?.dataset.act.startsWith('route-')) {
         const a = act.dataset.act;
         if (a === 'route-swap') [route.from, route.to] = [route.to, route.from];
@@ -1050,6 +1092,7 @@ const UI = (() => {
       if (mod && key === 'y') { e.preventDefault(); command('redo'); return; }
       if (mod && key === 'o') { e.preventDefault(); command('open'); return; }
       if (mod || e.altKey) return;
+      if (e.key === 'Escape' && document.body.classList.contains('schema-open')) { closeSchema(); return; }
       if (e.key === 'Escape') { closeMenu(); if (!Tools.escape()) select(null); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeSelected(); return; }
       if (e.key === 'Enter') { Tools.finishPolygon(); return; }

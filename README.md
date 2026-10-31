@@ -74,6 +74,12 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   cambi e l'itinerario linea per linea ("Costiera: Porto Vecchio → Bivio Nord · 3 fermate", poi "cambio a …").
   Il risultato si aggiorna da solo se si modifica la rete; × lo toglie.
 
+  **Schema della rete**: dal pannello Ferrovie, *Schema della rete (SVG / PDF)* apre lo schema "metropolitana"
+  (linee a 0°, 45° e 90°, disposizione automatica a partire dalle posizioni reali, linee affiancate sui tratti
+  comuni, interscambi come cerchi bianchi bordati di nero, legenda divisa per categoria). **Esporta SVG** scarica
+  il file (rifinibile in Inkscape); **Esporta PDF** apre la stampa del browser su un foglio A3 orizzontale: scegli
+  *Salva come PDF*. Esc chiude lo schema.
+
   Modificando la rete:
   - **spostare una stazione** (trascinandola o dalle coordinate) sposta con lei le linee che ci fermano;
     **trascinare un vertice-fermata** di una linea sposta anche la stazione e le altre linee che ci fermano;
