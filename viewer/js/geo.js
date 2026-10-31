@@ -77,6 +77,9 @@ const Geo = (() => {
   function countVertices(g) {
     let n = 0;
     if (isPoly(g)) polygons(g).forEach(p => p.forEach(r => n += r.length - 1));
+    // linee chiuse (linee ferroviarie circolari): il vertice di chiusura non si conta due volte
+    else if (isLine(g)) (g.type === 'LineString' ? [g.coordinates] : g.coordinates)
+      .forEach(l => n += l.length - (l.length > 2 && same(l[0], l[l.length - 1]) ? 1 : 0));
     else eachCoord(g, () => n++);
     return n;
   }

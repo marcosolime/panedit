@@ -35,7 +35,8 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 ## Uso
 
 - **Pannelli a sinistra**: uno per tipo di entità (Regni, Marche, Protettorati, Territori, Regioni, Continenti,
-  Acque, Località). Da ciascuno si crea una nuova entità, si filtra l'elenco, si nasconde o blocca quel tipo
+  Acque, Località), più **Ferrovie**, che raccoglie linee ferroviarie e stazioni in due sezioni. I tasti 1–9 aprono
+  i pannelli. Da ciascuno si crea una nuova entità, si filtra l'elenco, si nascondono o bloccano quei tipi
   sulla mappa. Passando sopra una riga l'entità si evidenzia sulla mappa; clic per selezionarla e centrarla.
 - **Marche e regni**: nel pannello Marche le marche sono raggruppate per regno; trascina una riga su un altro
   regno per riassegnarla. Il colore di una marca è quello del suo regno.
@@ -52,6 +53,15 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   una nuova entità, per darle il nome.
 - **Ispettore a destra**: nome, tipo, regno, categoria, colore, etichetta (dimensione, rotazione, posizione),
   misure, note.
+- **Ferrovie**: dal pannello *Ferrovie* (tasto 9) si creano stazioni e linee. Una **stazione** si crea anche con il
+  Punto (K) e **Crea** su *Stazione*: è un cerchio con il nome accanto, bianco e bordato di nero se è un
+  interscambio (ci fermano due o più linee). Una **linea** si traccia con *Linea per punti* (D) e **Crea** su
+  *Linea ferroviaria*; nella barra si scelgono categoria (*con fermate* / *direttissima*) e colore della prossima
+  linea. Durante il disegno:
+  - clic su una stazione = **fermata** (il vertice va esattamente sulla stazione); clic altrove = curva del binario;
+  - clic sul **primo punto** = chiude una **linea circolare** e termina;
+  - clic sull'ultimo punto, doppio clic o Invio = fine;
+  - un capolinea fuori da una stazione **crea la stazione** (da rinominare).
 - **DMZ** (Green Line, Blackline…): da **+ Nuovo territorio** → *DMZ (linea per punti)*, oppure con lo strumento
   *Linea per punti* (D) e **Crea** su *Territorio*, si traccia la linea principale. Nasce come semplice linea divisoria; nell'ispettore il campo **Margine** (blocchi per lato)
   la allarga in una fascia cuscinetto larga il doppio del margine. Il nome si ripete lungo la linea. Nel pannello
@@ -68,8 +78,8 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 | F | Area a mano libera (tieni premuto e disegna il contorno) |
 | P | Area per punti (clic sul primo punto o Invio per chiudere) |
 | L | Linea a mano libera (fiumi) |
-| D | Linea per punti (DMZ, linee dritte): clic per i punti, due clic = linea dritta, Invio o clic sull'ultimo punto per finire |
-| K | Località (punto): è l'unico tipo di entità che si crea come punto |
+| D | Linea per punti (DMZ, linee ferroviarie, linee dritte): clic per i punti, due clic = linea dritta, Invio o clic sull'ultimo punto per finire |
+| K | Punto: una località, oppure una stazione con **Crea** su *Stazione* (sono gli unici tipi che si creano come punto) |
 | B / E | Pennello / gomma: aggiunge o toglie area all'entità selezionata |
 | R | Ridisegna l'intero confine dell'entità selezionata |
 | Spazio | tenuto premuto, sposta la mappa mentre disegni |
@@ -78,7 +88,8 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 | G | mostra/nasconde la griglia dei chunk (anche dall'interruttore in fondo al pannello di destra) |
 | Ctrl+Z · Ctrl+Y · Ctrl+S · Ctrl+K | annulla · ripeti · salva · cerca |
 
-Il menu **Crea** sceglie il tipo di entità prodotto dagli strumenti, **Regno** il regno delle nuove marche.
+Il menu **Crea** sceglie il tipo di entità prodotto dagli strumenti e propone solo i tipi compatibili con lo
+strumento attivo (per esempio, con il Punto solo *Località* e *Stazione*); **Regno** sceglie il regno delle nuove marche.
 
 **Sovrapposizioni** (solo marche e protettorati):
 - *si ferma ai confini*: la nuova area viene ritagliata sui confini esistenti, così due marche confinanti
@@ -137,6 +148,8 @@ gioco **[x, z] in blocchi** (z cresce verso sud), non latitudine/longitudine.
 | `continente` | Polygon / MultiPolygon | `color` (facoltativo) |
 | `acqua` | LineString / Polygon | `subtype`: fiume, torrente, canale, lago, laguna, mare, oceano, golfo, baia, stretto |
 | `localita` | Point | `subtype`: capitale, citta, villaggio, castello, porto, luogo · `kingdom` (facoltativo) |
+| `linea` | LineString | linea ferroviaria: `color` · `subtype`: `fermate` (con fermate), `direttissima` |
+| `stazione` | Point | — (una linea ferma nelle stazioni che coincidono con i suoi vertici) |
 
 Un territorio LineString è una DMZ: `margin` è la distanza in blocchi della fascia cuscinetto da ciascun lato
 della linea (`0` = solo la linea). La categoria `area` / `dmz` si ricava dalla geometria.
@@ -152,7 +165,10 @@ Proprietà comuni: `id` (univoco, usato come riferimento da `kingdom` e `kingdom
 | `pos` | `[x, z]` del nome (`null` = punto più interno dell'area; sulle linee lunghe il nome si ripete lungo il tracciato) |
 | `repeat` | solo linee: numero di copie del nome lungo la linea, da 1 a 10 (`null` = automatico, in base alla lunghezza) |
 | `showKingdom` | mostra "(Regno)" sotto il nome di marche e località |
-| `anchor` | solo località: `right`, `left`, `top`, `bottom` |
+| `anchor` | solo località e stazioni: `right`, `left`, `top`, `bottom` |
+
+Un file con `metadata.version` più recente di quella che l'editor conosce si apre (con un avviso) ma non si
+può salvare: serve una versione aggiornata dell'editor.
 
 Un file GeoJSON qualsiasi viene comunque aperto: le feature senza `kind` diventano località (punti),
 acque (linee) o marche (poligoni). Lo stesso vale per una feature la cui geometria non è ammessa dal suo

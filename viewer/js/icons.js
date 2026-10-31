@@ -40,6 +40,9 @@ const ICONS = (() => {
     regione: s('<path d="M3 19l6-10 4 6 3-4 5 8z"/>'),
     continente: s('<circle cx="12" cy="12" r="9"/><path d="M3.5 9h17M3.5 15h17M12 3a14 14 0 010 18M12 3a14 14 0 000 18"/>'),
     acqua: s('<path d="M3 9c2.5-2 4.5-2 7 0s4.5 2 7 0 3-1.5 4-1"/><path d="M3 15c2.5-2 4.5-2 7 0s4.5 2 7 0 3-1.5 4-1"/>'),
-    localita: s('<path d="M12 21s-6-5.5-6-11a6 6 0 0112 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>')
+    localita: s('<path d="M12 21s-6-5.5-6-11a6 6 0 0112 0c0 5.5-6 11-6 11z"/><circle cx="12" cy="10" r="2"/>'),
+    linea: s('<path d="M7 21L17 3"/><path d="M6 15h9M8 11h8M10 7h7"/>'),
+    stazione: s('<circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2" fill="currentColor"/>'),
+    ferrovia: s('<rect x="6" y="3" width="12" height="13" rx="3"/><path d="M6 10h12"/><circle cx="9.5" cy="13" r="0.8" fill="currentColor"/><circle cx="14.5" cy="13" r="0.8" fill="currentColor"/><path d="M9 16l-2 4M15 16l2 4"/>'),
   };
 })();

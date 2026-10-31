@@ -1,7 +1,8 @@
 // Preferenze dell'editor (ricordate nel browser)
 const Settings = (() => {
   const KEY = 'panera-editor-settings';
-  const s = { snap: true, link: true, grid: false, leftOpen: true, rightOpen: true, overlap: 'clip', target: 'marca', kingdom: null, simplify: 2, bgBrightness: 100, bgSaturation: 100 };
+  const s = { snap: true, link: true, grid: false, leftOpen: true, rightOpen: true, overlap: 'clip', target: 'marca', kingdom: null, simplify: 2, bgBrightness: 100, bgSaturation: 100,
+    railType: 'fermate', railColor: null };   // categoria e colore (null = primo libero) della prossima linea ferroviaria
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY)) || {}); } catch { /* preferenze di default */ }
   Object.defineProperty(s, 'save', {
     value: () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* non essenziale */ } }
@@ -86,6 +87,35 @@ const Edit = (() => {
     const f = Model.make(kind, {}, line);
     Store.put(f, { label: `Crea ${KINDS[kind].label.toLowerCase()}` });
     Store.commit();
+    return f.id;
+  }
+
+  // Linea ferroviaria (regole in docs/ferrovie.md). tol: distanza in blocchi entro cui un clic "prende" una stazione.
+  //  - i vertici vicini a una stazione vanno esattamente sulla stazione: sono le fermate
+  //  - un ultimo punto vicino al primo chiude la linea circolare (ultimo vertice = primo)
+  //  - un capolinea (o il punto di chiusura dell'anello) fuori da una stazione ne crea una
+  function createRailLine(line, tol) {
+    const stations = Store.all('stazione').map(s => s.geometry.coordinates);
+    const near = v => stations.find(c => Math.hypot(c[0] - v[0], c[1] - v[1]) <= tol);
+    let pts = line.coordinates.map(v => (near(v) || v).slice());
+    pts = pts.filter((v, i) => !i || !Geo.same(v, pts[i - 1]));   // doppio clic: vertici ripetuti
+    if (pts.length < 2) return null;
+    const ring = pts.length >= 4 && Math.hypot(pts[0][0] - pts.at(-1)[0], pts[0][1] - pts.at(-1)[1]) <= tol;
+    if (ring) pts[pts.length - 1] = pts[0].slice();
+    Store.open('Crea linea ferroviaria');
+    let made = 0;
+    for (const v of ring ? [pts[0]] : [pts[0], pts.at(-1)]) {
+      if (stations.some(c => Geo.same(c, v))) continue;
+      const st = Model.make('stazione', {}, { type: 'Point', coordinates: v.slice() });
+      Store.put(st);
+      stations.push(st.geometry.coordinates);
+      made++;
+    }
+    const f = Model.make('linea', { subtype: Settings.railType, color: Settings.railColor }, { type: 'LineString', coordinates: pts });
+    Store.put(f);
+    Store.commit();
+    Settings.railColor = null; Settings.save();   // la prossima linea riprende il primo colore libero
+    if (made) UI.toast(`${made === 1 ? 'Creata una stazione' : `Create ${made} stazioni`} al capolinea: ${made === 1 ? 'dalle' : 'dai loro'} un nome`, 'info');
     return f.id;
   }
 
@@ -254,7 +284,7 @@ const Edit = (() => {
   }
 
   return {
-    createArea, createLine, createPoint, createKingdom, addArea, subArea, replaceArea,
+    createArea, createLine, createRailLine, createPoint, createKingdom, addArea, subArea, replaceArea,
     vertexDragStart, vertexDragEnd, geometryEdited, labelMoved, update, setKingdom, addKingdom, removeKingdom, moveKingdom, remove, simplify,
     explode, targetKind, validKingdom
   };
@@ -263,6 +293,8 @@ const Edit = (() => {
 // Strumenti interattivi sulla mappa
 const Tools = (() => {
   let map, tool = 'select', drawing = null, space = false, swallow = false;
+  const SNAP_PX = 14;   // distanza di aggancio (pixel), come snapDistance di Leaflet-Geoman
+  let lastDown = null;
   const FREEHAND = ['freehand', 'line', 'add', 'sub', 'redraw'];
 
   const META = {
@@ -271,7 +303,7 @@ const Tools = (() => {
     polygon:  { key: 'P', name: 'Area per punti' },
     line:     { key: 'L', name: 'Linea a mano libera (fiumi)' },
     polyline: { key: 'D', name: 'Linea per punti (DMZ, linee dritte)' },
-    point:    { key: 'K', name: 'Località (punto)' },
+    point:    { key: 'K', name: 'Punto (località o stazione)' },
     add:      { key: 'B', name: "Pennello: aggiungi all'area selezionata" },
     sub:      { key: 'E', name: "Gomma: togli dall'area selezionata" },
     redraw:   { key: 'R', name: "Ridisegna il confine dell'area selezionata" }
@@ -294,8 +326,10 @@ const Tools = (() => {
       case 'freehand': return `Tieni premuto e disegna il contorno: nuova ${kindOf('Polygon')} · Spazio + trascina per spostare la mappa · Esc per annullare`;
       case 'polygon': return `Clic per aggiungere i vertici della nuova ${kindOf('Polygon')} · clic sul primo vertice o Invio per chiudere · Esc per annullare`;
       case 'line': return `Tieni premuto e disegna il corso del fiume · Spazio + trascina per spostare la mappa`;
-      case 'polyline': return `Clic per aggiungere i punti ${dmz ? 'della DMZ' : `della linea (${kindOf('LineString', 'territorio')})`} · due clic = linea dritta · clic sull'ultimo punto o Invio per finire · Esc per annullare`;
-      case 'point': return 'Clic sulla mappa per posizionare la nuova località';
+      case 'polyline': if (Edit.targetKind(Settings.target, 'LineString', 'territorio') === 'linea')
+        return 'Clic su una stazione per una fermata, altrove per una curva · clic sul primo punto per chiudere una linea circolare · clic sull\'ultimo punto, doppio clic o Invio per finire · Esc per annullare';
+        return `Clic per aggiungere i punti ${dmz ? 'della DMZ' : `della linea (${kindOf('LineString', 'territorio')})`} · due clic = linea dritta · clic sull'ultimo punto o Invio per finire · Esc per annullare`;
+      case 'point': return `Clic sulla mappa per posizionare la nuova ${kindOf('Point')}`;
       case 'add': return `Disegna l'area da aggiungere a ${name} · Spazio + trascina per spostare la mappa · Esc per finire`;
       case 'sub': return `Disegna l'area da togliere a ${name} · Spazio + trascina per spostare la mappa · Esc per finire`;
       case 'redraw': return `Disegna il nuovo confine completo di ${name}`;
@@ -408,6 +442,8 @@ const Tools = (() => {
     el.addEventListener('pointermove', e => { if (drawing) { e.stopPropagation(); move(e); } }, true);
     el.addEventListener('pointerup', e => { if (drawing) { e.stopPropagation(); finish(); } }, true);
     el.addEventListener('pointercancel', () => cancel(), true);
+    // ultimo clic sulla mappa (serve a riconoscere la chiusura di una linea circolare)
+    el.addEventListener('pointerdown', e => { lastDown = { p: map.mouseEventToContainerPoint(e), t: Date.now() }; }, true);
 
     // Spazio tenuto premuto: sposta la mappa anche mentre si disegna
     document.addEventListener('keydown', e => {
@@ -429,7 +465,14 @@ const Tools = (() => {
       const g = Geo.fromLayer(e.layer);
       e.layer.remove();
       if (e.shape === 'Line') {
-        const id = g && g.coordinates.length >= 2 && Edit.createLine(Settings.target, g, 'territorio');
+        const rail = Edit.targetKind(Settings.target, 'LineString', 'territorio') === 'linea';
+        const ok = g && g.coordinates.length >= 2;
+        // Leaflet-Geoman termina la linea quando si clicca il primo punto, ma senza aggiungerlo: se il clic che l'ha
+        // terminata era sul primo punto, è una linea circolare e il vertice di chiusura lo si aggiunge qui
+        if (rail && ok && g.coordinates.length >= 3 && lastDown && Date.now() - lastDown.t < 1000 &&
+            map.latLngToContainerPoint(Geo.ll(g.coordinates[0])).distanceTo(lastDown.p) <= SNAP_PX)
+          g.coordinates.push(g.coordinates[0].slice());
+        const id = ok && (rail ? Edit.createRailLine(g, SNAP_PX * Math.pow(2, -map.getZoom())) : Edit.createLine(Settings.target, g, 'territorio'));
         set('select');
         if (id) UI.select(id, { focus: true });
         return;

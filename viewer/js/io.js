@@ -4,6 +4,10 @@ const IO = (() => {
   const TYPES = [{ description: 'Mappa GeoJSON', accept: { 'application/geo+json': ['.geojson', '.json'] } }];
   const NEW_NAME = 'nuova-mappa.geojson';
   let handle = null, fileName = NEW_NAME, draftTimer = null;
+  // versione del formato del file aperto, se più recente di quella che l'editor conosce: si guarda, non si salva
+  let tooNew = null;
+  const tooNewMsg = v => `Il file è in un formato più recente (versione ${v}) di quello che questo editor conosce ` +
+    `(${Model.FORMAT_VERSION}): puoi guardarlo ma non salvarlo. Usa una versione aggiornata dell'editor.`;
   const listeners = [];
 
   const notify = () => listeners.forEach(fn => fn());
@@ -30,6 +34,9 @@ const IO = (() => {
   }
 
   function loadData(json, name, h = null) {
+    const v = json.metadata?.version;
+    tooNew = typeof v === 'number' && v > Model.FORMAT_VERSION ? v : null;
+    if (tooNew) UI.toast(tooNewMsg(tooNew), 'warn');
     Store.load(json);
     fileName = name;
     handle = h;
@@ -43,6 +50,7 @@ const IO = (() => {
     if (draft && draft.dirty) {
       Store.load(draft.data);
       fileName = draft.fileName || fileName;
+      tooNew = draft.tooNew || null;
       Store.setDirty(true);
       notify();
       return { restored: draft.savedAt };
@@ -88,6 +96,7 @@ const IO = (() => {
 
   // Salva: riscrive il file aperto se possibile, altrimenti chiede dove salvare
   async function save(asNew = false) {
+    if (tooNew) { UI.toast(tooNewMsg(tooNew), 'error'); return false; }
     const text = serialize();
     if (!asNew && handle) {
       try { await writeTo(handle, text); return saved(); } catch (e) { if (e.name === 'AbortError') return false; }
@@ -131,7 +140,7 @@ const IO = (() => {
   function writeDraft(dirty = Store.dirty) {
     try {
       localStorage.setItem(DRAFT_KEY, JSON.stringify({
-        savedAt: new Date().toISOString(), fileName, dirty, data: Model.toFeatureCollection()
+        savedAt: new Date().toISOString(), fileName, dirty, tooNew, data: Model.toFeatureCollection()
       }));
       draftState = dirty ? `Bozza salvata alle ${new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}` : '';
     } catch {

@@ -6,9 +6,9 @@ const Render = (() => {
   const hooks = { hover: () => {}, click: () => {}, vertexDragStart: () => {}, vertexDragEnd: () => {}, edited: () => {}, moved: () => {} };
 
   // Ordine dei livelli (dal basso): continenti, regioni, territori, acque, protettorati, marche, DMZ (fascia e
-  // linea principale), etichette, località
+  // linea principale), linee ferroviarie, etichette, località e stazioni
   const PANES = { continente: 402, regione: 404, territorio: 406, acqua: 408, protettorato: 410, marca: 412,
-    dmzBand: 414, dmz: 416, sketch: 440, labels: 450, localita: 460 };
+    dmzBand: 414, dmz: 416, linea: 418, sketch: 440, labels: 450, localita: 460 };
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const norm = s => (s || '').trim().toLowerCase();
@@ -86,6 +86,8 @@ const Render = (() => {
       case 'acqua': return line
         ? { color: c, weight: 3.5, opacity: 0.85, lineCap: 'round', lineJoin: 'round', fill: false }
         : { color: c, weight: 1.6, opacity: 0.75, fillColor: c, fillOpacity: 0.16 };
+      // linee ferroviarie: le direttissime più spesse
+      case 'linea': return { color: c, weight: p.subtype === 'direttissima' ? 5.5 : 3.5, opacity: 1, lineCap: 'round', lineJoin: 'round', fill: false };
     }
     return {};
   }
@@ -96,6 +98,7 @@ const Render = (() => {
       case 'territorio': return Geo.isLine(f.geometry) ? { ...s, weight: s.weight + 2 } : { ...s, fillOpacity: 0.5 };
       case 'regione': case 'continente': return { ...s, opacity: 0.95, weight: 2.6, fillOpacity: 0.1 };
       case 'acqua': return { ...s, weight: s.weight + 2, opacity: 1, fillOpacity: (s.fillOpacity || 0) + 0.12 };
+      case 'linea': return { ...s, weight: s.weight + 2 };
     }
     return s;
   }
@@ -123,8 +126,8 @@ const Render = (() => {
     }
     // Valori tarati sulle dimensioni scelte a mano nelle mappe reali (quasi sempre sotto i 30 blocchi)
     if (!g) return 20;
-    // i punti sono solo località
-    if (g.type === 'Point') return { capitale: 14, citta: 10, villaggio: 8, castello: 8, porto: 8, luogo: 6 }[p.subtype] || 9;
+    // punti: località e stazioni
+    if (g.type === 'Point') return k === 'stazione' ? 8 : { capitale: 14, citta: 10, villaggio: 8, castello: 8, porto: 8, luogo: 6 }[p.subtype] || 9;
     // cresce con la radice della lunghezza: sulle linee lunghe il nome si ripete invece di ingrandirsi
     if (Geo.isLine(g)) return clamp(Math.sqrt(Geo.lineAt(g, 0.5).length) * 0.6 / Math.max(1, len / 8), 4, 40);
     const b = Geo.bbox(g), w = b[2] - b[0];
@@ -196,15 +199,19 @@ const Render = (() => {
 
   function makeLabel(f, interactive, { pos, rot }) {
     if (!pos) return null;
-    const p = f.properties;
-    const html = p.kind === 'localita'
-      ? `<div class="in a-${p.label.anchor || 'right'}"><i class="dot s-${esc(p.subtype || 'citta')}"></i><div class="txt" style="--r:${rot}deg">${labelHtml(f)}</div></div>`
+    const p = f.properties, point = KINDS[p.kind].pointLabel;
+    // località e stazioni: pallino con il nome accanto (le stazioni riusano lo stile delle località)
+    const dot = p.kind === 'stazione' ? `stazione${isInterchange(f) ? ' s-interscambio' : ''}` : esc(p.subtype || 'citta');
+    const html = point
+      ? `<div class="in a-${p.label.anchor || 'right'}"><i class="dot s-${dot}"></i><div class="txt" style="--r:${rot}deg">${labelHtml(f)}</div></div>`
       : `<div class="in" style="--r:${rot}deg">${labelHtml(f)}</div>`;
     const sub = p.subtype ? ` s-${p.subtype}` : '';
+    const cls = `pe-label pe-label-${p.kind}${point && p.kind !== 'localita' ? ' pe-label-localita' : ''} pe-k-${p.kind}${sub}`;
     return L.marker(Geo.ll(pos), {
-      icon: L.divIcon({ className: `pe-label pe-label-${p.kind} pe-k-${p.kind}${sub}`, html, iconSize: null }),
+      icon: L.divIcon({ className: cls, html, iconSize: null }),
       pane: interactive ? 'localita' : 'labels',
-      interactive: true, keyboard: false, pmIgnore: true, snapIgnore: true,
+      // le stazioni sono punti di aggancio per le linee ferroviarie
+      interactive: true, keyboard: false, pmIgnore: true, snapIgnore: p.kind !== 'stazione',
       zIndexOffset: { regno: -1000, continente: -900, regione: -800, territorio: -700 }[p.kind] || 0
     });
   }
@@ -222,7 +229,7 @@ const Render = (() => {
       if (it.kind === 'regno') { it.els.forEach(el => { el.style.display = 'none'; }); return; }
       // L'entità selezionata mostra sempre il nome, per poterlo trascinare; se è nascosto lo mostra attenuato
       const sel = state.selected === it.id, off = sel && !it.show;
-      if (it.kind === 'localita') {
+      if (KINDS[it.kind].pointLabel) {
         const el = it.els[0], txt = el.querySelector('.txt');
         el.style.display = px >= 5 || sel ? '' : 'none';   // il pallino non dipende da "mostra il nome"
         el.classList.toggle('pe-label-off', off);
@@ -237,6 +244,24 @@ const Render = (() => {
         if (on) el.firstChild.style.fontSize = Math.max(px, 7).toFixed(1) + 'px';
       });
     });
+  }
+
+  // ---- ferrovie ----
+  // Interscambio: stazione su cui fermano due o più linee (una linea vi ferma se ha un vertice sulla stazione)
+  function isInterchange(st) {
+    const c = st.geometry?.coordinates;
+    if (!c) return false;
+    let n = 0;
+    for (const l of Store.all('linea')) {
+      if (l.geometry?.type === 'LineString' && l.geometry.coordinates.some(v => Geo.same(v, c)) && ++n > 1) return true;
+    }
+    return false;
+  }
+  function updateInterchanges() {
+    for (const st of Store.all('stazione')) {
+      const dot = items.get(st.id)?.els[0]?.querySelector('.dot');
+      if (dot) dot.classList.toggle('s-interscambio', isInterchange(st));
+    }
   }
 
   // ---- costruzione dei layer ----
@@ -365,12 +390,14 @@ const Render = (() => {
   }
 
   function onChange({ ids, sources }) {
-    let kingdoms = false;
+    let kingdoms = false, rail = false;
     for (const id of ids) {
       const f = Store.get(id), it = items.get(id);
       if ((f && f.properties.kind === 'regno') || (it && it.kind === 'regno')) kingdoms = true;
+      if ([f?.properties.kind, it?.kind].some(k => k === 'linea' || k === 'stazione')) rail = true;
       sync(id, sources[id]);
     }
+    if (rail) updateInterchanges();
     // Le etichette dei regni dipendono dalle marche; i colori delle marche dai regni
     if (kingdoms) [...items].forEach(([id, it]) => {
       const f = Store.get(id);

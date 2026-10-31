@@ -1,12 +1,13 @@
 // Modello dati: tipi di entità, normalizzazione GeoJSON, store con annulla/ripeti.
 //
 // File GeoJSON (FeatureCollection). Ogni Feature ha properties:
-//   id, kind ('regno' | 'marca' | 'protettorato' | 'territorio' | 'regione' | 'continente' | 'acqua' | 'localita'),
+//   id, kind ('regno' | 'marca' | 'protettorato' | 'territorio' | 'regione' | 'continente' | 'acqua' | 'localita'
+//             | 'linea' | 'stazione'),
 //   name, kingdom (id del regno, per marche/protettorati/località), subtype, color, notes,
 //   margin (solo territori DMZ: blocchi per lato dalla linea principale),
 //   kingdoms (solo protettorati: tutti i regni proprietari, nell'ordine delle strisce; kingdom = kingdoms[0]),
 //   label: { show, size (blocchi, null = automatica), rotation (gradi, null = automatica), pos ([x, z], null = automatica),
-//            showKingdom, anchor (solo località) }
+//            showKingdom, anchor (solo località e stazioni), repeat (solo linee) }
 // I regni sono Feature con geometry null: la loro estensione è l'unione delle loro marche.
 const KINDS = {
   regno: {
@@ -40,19 +41,37 @@ const KINDS = {
     subtypes: { fiume: 'Fiume', torrente: 'Torrente', canale: 'Canale', lago: 'Lago', laguna: 'Laguna', mare: 'Mare',
       oceano: 'Oceano', golfo: 'Golfo', baia: 'Baia', stretto: 'Stretto' }
   },
+  // pointLabel: punto disegnato come pallino con il nome accanto (posizione scelta con label.anchor)
   localita: {
     label: 'Località', plural: 'Località', article: 'Nuova località', geom: ['Point'], hasKingdom: true, color: '#ffffff',
+    pointLabel: true,
     subtypes: { capitale: 'Capitale', citta: 'Città', villaggio: 'Villaggio', castello: 'Castello', porto: 'Porto',
       luogo: 'Luogo' }
+  },
+  // Rete ferroviaria (vedi docs/ferrovie.md): le fermate di una linea sono le stazioni sui suoi vertici
+  linea: {
+    label: 'Linea ferroviaria', plural: 'Linee', article: 'Nuova linea', geom: ['LineString'], color: '#c4101c',
+    subtypes: { fermate: 'Con fermate', direttissima: 'Direttissima' }
+  },
+  stazione: {
+    label: 'Stazione', plural: 'Stazioni', article: 'Nuova stazione', geom: ['Point'], color: '#ffffff', pointLabel: true
   }
 };
-const KIND_ORDER = ['regno', 'marca', 'protettorato', 'territorio', 'regione', 'continente', 'acqua', 'localita'];
+const KIND_ORDER = ['regno', 'marca', 'protettorato', 'territorio', 'regione', 'continente', 'acqua', 'localita', 'linea', 'stazione'];
+// Pannelli della colonna di sinistra: uno per tipo, tranne "Ferrovie" che raccoglie linee e stazioni
+const PANELS = [
+  ...KIND_ORDER.filter(k => k !== 'linea' && k !== 'stazione').map(k => ({ id: k, kinds: [k], label: KINDS[k].plural })),
+  { id: 'ferrovia', kinds: ['linea', 'stazione'], label: 'Ferrovie' }
+];
+const panelOf = kind => (PANELS.find(p => p.id === kind) || PANELS.find(p => p.kinds.includes(kind))).id;
 const POLITICAL = KIND_ORDER.filter(k => KINDS[k].political);
 
 const PALETTE = ['#e8d81c', '#2fd3c9', '#e8861c', '#c4101c', '#1f3fae', '#c8c9b2', '#7a3fd1', '#3fae4a', '#d1458f',
   '#8a5a2b', '#5ac8fa', '#f2a7c3', '#9fd356', '#ff6b4a', '#4a6b8a', '#b38df2'];
 
 const Model = (() => {
+  // Versione del formato del file: l'editor non salva file con una versione più recente (vedi IO)
+  const FORMAT_VERSION = 1;
   const clone = o => o == null ? o : structuredClone(o);
   const rand = () => Math.random().toString(36).slice(2, 8);
   const slug = s => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '')
@@ -65,14 +84,14 @@ const Model = (() => {
   }
 
   function defaultLabel(kind) {
-    return { show: true, size: null, rotation: null, pos: null, showKingdom: true, anchor: kind === 'localita' ? 'right' : null };
+    return { show: true, size: null, rotation: null, pos: null, showKingdom: true, anchor: KINDS[kind].pointLabel ? 'right' : null };
   }
 
   function make(kind, props = {}, geometry = null) {
     const name = props.name ?? KINDS[kind].article;
     const id = newId(kind, name);
     const p = { id, kind, name, kingdom: null, subtype: null, color: null, notes: '', label: defaultLabel(kind), ...props };
-    if (kind === 'regno' && !p.color) p.color = nextColor();
+    if ((kind === 'regno' || kind === 'linea') && !p.color) p.color = nextColor(kind);
     fitProps(p, geometry);
     return { type: 'Feature', id, properties: p, geometry };
   }
@@ -104,8 +123,9 @@ const Model = (() => {
     return p;
   }
 
-  function nextColor() {
-    const used = new Set(Store.all('regno').map(f => (f.properties.color || '').toLowerCase()));
+  // Primo colore della tavolozza non ancora usato da un'entità dello stesso tipo (regni, linee ferroviarie)
+  function nextColor(kind = 'regno') {
+    const used = new Set(Store.all(kind).map(f => (f.properties.color || '').toLowerCase()));
     return PALETTE.find(c => !used.has(c)) || '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0');
   }
 
@@ -142,7 +162,7 @@ const Model = (() => {
       name: meta.name || 'Panera',
       metadata: {
         format: 'panera-map',
-        version: 1,
+        version: FORMAT_VERSION,
         coordinates: 'Coordinate di gioco [x, z] in blocchi (z cresce verso sud)',
         updated: new Date().toISOString(),
         ...meta.extra
@@ -151,7 +171,7 @@ const Model = (() => {
     };
   }
 
-  return { clone, make, fitProps, kingdomIds, setKingdoms, normalize, toFeatureCollection, nextColor, newId };
+  return { FORMAT_VERSION, clone, make, fitProps, kingdomIds, setKingdoms, normalize, toFeatureCollection, nextColor, newId };
 })();
 
 // Store: tutte le entità, raggruppamento delle modifiche in transazioni, annulla/ripeti.

@@ -118,6 +118,11 @@ kbd { font: 11px/1 var(--ui); padding: 3px 5px; border-radius: 4px; background: 
 .btn-new { display: flex; align-items: center; justify-content: center; gap: 6px; margin: 0 14px 10px; height: 34px; border: 1px dashed var(--line-2); border-radius: 7px; background: none; color: var(--text); }
 .btn-new:hover { border-color: var(--accent); color: var(--accent); background: rgba(224, 184, 79, .06); }
 .btn-new svg { width: 16px; height: 16px; }
+/* pannelli con più tipi (Ferrovie): un pulsante "nuovo" per tipo, affiancati, e un titolo per sezione */
+.new-row { display: flex; gap: 6px; margin: 0 14px 10px; }
+.new-row .btn-new { flex: 1; margin: 0; }
+.list .sec-h { margin: 10px 8px 4px; color: var(--text); font-size: 12px; font-weight: 700; letter-spacing: .04em; }
+.list .sec-h:first-child { margin-top: 2px; }
 .filter { position: relative; margin: 0 14px 8px; }
 .filter svg { position: absolute; left: 8px; top: 50%; transform: translateY(-50%); width: 14px; height: 14px; color: var(--faint); }
 .filter input { width: 100%; height: 30px; padding: 0 8px 0 28px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); outline: none; }
@@ -183,6 +188,7 @@ kbd { font: 11px/1 var(--ui); padding: 3px 5px; border-radius: 4px; background: 
 .opt[hidden] { display: none; }
 .opt select, .fld select { height: 28px; padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--text); outline: none; }
 #optKingdom { border-left: 4px solid var(--c, transparent); }
+.opt input[type=color] { width: 30px; height: 28px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); cursor: pointer; }
 .tg { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: none; color: var(--muted); font-size: 12px; }
 .tg svg { width: 15px; height: 15px; }
 .tg.on { color: var(--text); border-color: var(--line-2); background: var(--surface-3); }
@@ -265,13 +271,21 @@ path.pe-soft.pe-selected { filter: none; }
 .pe-label-localita.is-draggable .in { outline: none; }
 .pe-label-localita.is-draggable .dot { box-shadow: 0 0 0 2px #0a0c10, 0 0 0 5px var(--accent); }
 .pe-label-localita.s-capitale .txt { font-weight: 900; }
+/* stazioni: cerchio scuro bordato di bianco; interscambio più grande, bianco bordato di nero */
+.pe-label-localita .dot.s-stazione { width: 10px; height: 10px; margin: -5px 0 0 -5px; background: #1b1f26; box-shadow: 0 0 0 2px #fff, 0 1px 4px rgba(0,0,0,.6); }
+.pe-label-localita .dot.s-stazione.s-interscambio { width: 13px; height: 13px; margin: -6.5px 0 0 -6.5px; background: #fff; box-shadow: 0 0 0 2.5px #0a0c10, 0 1px 4px rgba(0,0,0,.6); }
+.pe-label-stazione .txt { font-family: var(--ui); font-weight: 700; text-transform: none; letter-spacing: .02em; }
+/* nome delle linee ferroviarie, lungo il tracciato */
+.pe-label-linea .in { font-family: var(--ui); font-weight: 800; text-transform: none; letter-spacing: .06em; }
 .pe-label-localita.s-luogo .txt, .pe-label-localita.s-villaggio .txt { font-weight: 600; }
 
 /* visibilità e blocco per tipo */
 .hide-regno .pe-k-regno, .hide-marca .pe-k-marca, .hide-protettorato .pe-k-protettorato, .hide-territorio .pe-k-territorio,
-.hide-regione .pe-k-regione, .hide-continente .pe-k-continente, .hide-acqua .pe-k-acqua, .hide-localita .pe-k-localita { display: none !important; }
+.hide-regione .pe-k-regione, .hide-continente .pe-k-continente, .hide-acqua .pe-k-acqua, .hide-localita .pe-k-localita,
+.hide-linea .pe-k-linea, .hide-stazione .pe-k-stazione { display: none !important; }
 .lock-marca .pe-k-marca, .lock-protettorato .pe-k-protettorato, .lock-territorio .pe-k-territorio, .lock-regione .pe-k-regione,
-.lock-continente .pe-k-continente, .lock-acqua .pe-k-acqua, .lock-localita .pe-k-localita { pointer-events: none !important; }
+.lock-continente .pe-k-continente, .lock-acqua .pe-k-acqua, .lock-localita .pe-k-localita,
+.lock-linea .pe-k-linea, .lock-stazione .pe-k-stazione { pointer-events: none !important; }
 
 /* ---------------------------------------------------------------- ispettore */
 #inspector { background: var(--surface); border-left: 1px solid var(--line); min-height: 0; display: flex; flex-direction: column; }

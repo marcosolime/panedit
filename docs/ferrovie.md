@@ -1,7 +1,7 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **progettazione conclusa, decisioni di sviluppo prese, sviluppo non iniziato** (31/10/2026). Le nuove
+Stato: **fase 1 completata**, fasi 2–6 da fare (31/10/2026). Le nuove
 funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
@@ -97,6 +97,22 @@ stabile. Le fasi successive aggiungono funzioni senza toccare il formato (la fas
 facoltativo).
 
 ### Fase 1: stazioni e linee sulla mappa
+
+**Fase 1 fatta** (31/10/2026).
+- *Prima parte*: tipi `linea` / `stazione` (`pointLabel` in `KINDS` per località e stazioni), `PANELS` e pannello
+  "Ferrovie" con due sezioni (tasti 1–9), menu Crea filtrato per strumento (`targetOptions` in `ui.js`), disegno
+  di linee (pane `linea`, direttissime più spesse, colore libero della tavolozza a ogni nuova linea) e stazioni
+  (cerchio con il nome accanto, interscambi calcolati da `isInterchange` in `render.js`).
+- *Seconda parte*: le stazioni sono punti di aggancio (`snapIgnore: false`); `Edit.createRailLine` in
+  `tools.js` porta esattamente sulla stazione i vertici entro 14 px, chiude l'anello se l'ultimo punto è sul primo
+  (un clic sul primo punto termina il disegno: Leaflet-Geoman non aggiunge quel vertice, lo aggiunge `pm:create`
+  riconoscendo dove è avvenuto l'ultimo clic), crea le stazioni mancanti ai
+  capolinea (con un avviso per dar loro un nome) e toglie i vertici doppi del doppio clic; barra degli strumenti
+  con categoria e colore della prossima linea (`Settings.railType` / `railColor`, il colore vale per una linea
+  sola); `Geo.countVertices` non conta due volte il vertice di chiusura; `Model.FORMAT_VERSION` e controllo in
+  `io.js` (un file più recente si apre con un avviso e non si salva, anche dalla bozza).
+- Il doppio clic per finire non ha richiesto codice: in Leaflet-Geoman il secondo clic cade sull'ultimo vertice,
+  che termina la linea.
 
 - `stazione` (geom `Point`) e `linea` (geom `LineString`, `subtypes: { direttissima, fermate }`, default in
   `Model.fitProps`) in `KINDS` e `KIND_ORDER`, icona del treno in [icons.js](../viewer/js/icons.js).

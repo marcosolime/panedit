@@ -119,45 +119,49 @@ const UI = (() => {
     const go = id => { select(id, { zoom: true }); input.value = ''; hits = []; input.blur(); box.classList.remove('open'); };
   }
 
-  // ---------------------------------------------------------------- barra laterale (tipi)
+  // ---------------------------------------------------------------- barra laterale (pannelli)
+  // panel è l'id di un pannello di PANELS: coincide con il tipo, tranne "ferrovia" (linee e stazioni)
+  const panelDef = id => PANELS.find(x => x.id === id);
   function buildRail() {
-    $('#rail').innerHTML = KIND_ORDER.map((k, i) => `<button class="rail-btn" data-kind="${k}" title="${KINDS[k].plural} (${i + 1})">
-      ${ICONS[k]}<span>${KINDS[k].plural}</span><b class="badge"></b></button>`).join('');
-    // pannello chiuso: il clic apre quel tipo; clic sul tipo già aperto: chiude il pannello
+    $('#rail').innerHTML = PANELS.map((P, i) => `<button class="rail-btn" data-panel="${P.id}" title="${esc(P.label)} (${i + 1})">
+      ${ICONS[P.id]}<span>${esc(P.label)}</span><b class="badge"></b></button>`).join('');
+    // pannello chiuso: il clic apre quel pannello; clic sul pannello già aperto: lo chiude
     $('#rail').addEventListener('click', e => {
-      const b = e.target.closest('[data-kind]');
+      const b = e.target.closest('[data-panel]');
       if (!b) return;
-      if (b.dataset.kind === panel && Settings.leftOpen) { setSide('left', false); return; }
-      showPanel(b.dataset.kind);
+      if (b.dataset.panel === panel && Settings.leftOpen) { setSide('left', false); return; }
+      showPanel(b.dataset.panel);
       setSide('left', true);
     });
   }
   function updateRail() {
     document.querySelectorAll('.rail-btn').forEach(b => {
-      const k = b.dataset.kind;
-      b.classList.toggle('active', k === panel);
-      b.classList.toggle('hidden-kind', Render.state.hidden.has(k));
-      b.querySelector('.badge').textContent = Store.all(k).length || '';
+      const P = panelDef(b.dataset.panel);
+      b.classList.toggle('active', P.id === panel);
+      b.classList.toggle('hidden-kind', P.kinds.every(k => Render.state.hidden.has(k)));
+      b.querySelector('.badge').textContent = P.kinds.reduce((n, k) => n + Store.all(k).length, 0) || '';
     });
   }
 
+  // k: id di un pannello o un tipo (si apre il pannello che lo contiene)
   function showPanel(k) {
-    panel = k;
-    const K = KINDS[k];
-    const lockable = k !== 'regno';
+    panel = panelOf(k);
+    const P = panelDef(panel);
+    const lockable = panel !== 'regno';
+    const news = P.kinds.map(x => `<button class="btn-new" data-act="new" data-kind="${x}">${ICONS.plus}<span>${esc(KINDS[x].article)}</span></button>`).join('');
     $('#panel').innerHTML = `
       <div class="ph">
-        <div class="ph-title">${ICONS[k]}<h2>${K.plural}</h2><span class="count" id="phCount"></span></div>
+        <div class="ph-title">${ICONS[panel]}<h2>${esc(P.label)}</h2><span class="count" id="phCount"></span></div>
         <div class="ph-tools">
           <button class="ib" data-act="vis" id="phVis"></button>
           ${lockable ? '<button class="ib" data-act="lock" id="phLock"></button>' : ''}
         </div>
       </div>
-      <p class="ph-desc">${esc(DESCRIPTIONS[k])}</p>
-      <button class="btn-new" data-act="new">${ICONS.plus}<span>${esc(K.article)}</span></button>
-      <div class="filter">${ICONS.search}<input type="search" id="phFilter" placeholder="Filtra ${K.plural.toLowerCase()}…" value="${esc(filters[k] || '')}"></div>
+      <p class="ph-desc">${esc(DESCRIPTIONS[panel])}</p>
+      ${P.kinds.length > 1 ? `<div class="new-row">${news}</div>` : news}
+      <div class="filter">${ICONS.search}<input type="search" id="phFilter" placeholder="Filtra ${esc(P.label.toLowerCase())}…" value="${esc(filters[panel] || '')}"></div>
       <div class="list" id="phList"></div>`;
-    $('#phFilter').addEventListener('input', e => { filters[k] = e.target.value; renderList(); });
+    $('#phFilter').addEventListener('input', e => { filters[panel] = e.target.value; renderList(); });
     renderList();
     updateRail();
   }
@@ -166,11 +170,12 @@ const UI = (() => {
     regno: 'Ogni regno ha un colore; la sua estensione è data dalle marche che gli appartengono.',
     marca: 'Suddivisioni dei regni con nome e confini definiti. Trascina una marca su un regno per assegnarla.',
     protettorato: 'Territori sotto sovranità di un regno ma non incorporati: confini indicativi, tratteggiati.',
-    territorio: 'Aree non incorporate in alcun regno, dai confini indefiniti (bordo sfumato).',
+    territorio: 'Aree non incorporate in alcun regno, dai confini indefiniti (bordo sfumato), e linee di confine DMZ.',
     regione: 'Aree con caratteri naturali omogenei (es. pianure di Veld).',
     continente: 'Grandi masse di terra riconoscibili sulla mappa.',
-    acqua: 'Fiumi (linee), laghi e mari (aree) oppure solo il nome (punto).',
-    localita: 'Città, villaggi e luoghi: oggetti puntiformi con nome.'
+    acqua: 'Fiumi e canali (linee), laghi e mari (aree).',
+    localita: 'Città, villaggi e luoghi: oggetti puntiformi con nome.',
+    ferrovia: 'Rete ferroviaria: linee (con fermate o direttissime) e stazioni. Una linea ferma nelle stazioni sui suoi vertici.'
   };
 
   function rowHtml(f, sw) {
@@ -191,12 +196,10 @@ const UI = (() => {
     listQueued = false;
     const box = $('#phList');
     if (!box) return;
-    const k = panel, q = (filters[k] || '').trim().toLowerCase();
+    const P = panelDef(panel), q = (filters[panel] || '').trim().toLowerCase();
     const match = f => !q || (f.properties.name || '').toLowerCase().includes(q);
-    const all = Store.all(k).sort(byName);
-    const shown = all.filter(match);
-    $('#phCount').textContent = all.length;
-    const hidden = Render.state.hidden.has(k), locked = Render.state.locked.has(k);
+    $('#phCount').textContent = P.kinds.reduce((n, k) => n + Store.all(k).length, 0);
+    const hidden = P.kinds.every(k => Render.state.hidden.has(k)), locked = P.kinds.every(k => Render.state.locked.has(k));
     $('#phVis').innerHTML = hidden ? ICONS.eyeOff : ICONS.eye;
     $('#phVis').title = hidden ? 'Mostra sulla mappa' : 'Nascondi dalla mappa';
     $('#phVis').classList.toggle('off', hidden);
@@ -205,19 +208,30 @@ const UI = (() => {
       $('#phLock').title = locked ? 'Sblocca (rendi selezionabili sulla mappa)' : 'Blocca (non selezionabili sulla mappa)';
       $('#phLock').classList.toggle('off', locked);
     }
+    // pannelli con più tipi (Ferrovie): una sezione per tipo
+    const multi = P.kinds.length > 1;
+    box.innerHTML = P.kinds.map(k => {
+      const shown = Store.all(k).sort(byName).filter(match);
+      const masc = k === 'regno' || k === 'territorio' || k === 'continente';
+      const html = kindList(k, shown, q) || `<div class="empty">${q ? 'Nessun risultato' : `Nessun${masc ? ' ' : 'a '}${KINDS[k].label.toLowerCase()} — usa il pulsante qui sopra per crearne ${masc ? 'uno' : 'una'}.`}</div>`;
+      return (multi ? `<div class="sec-h">${esc(KINDS[k].plural)}</div>` : '') + html;
+    }).join('');
+  }
 
-    let html = '';
+  // Righe di un tipo: regni; raggruppate per regno (marche, protettorati, località) o per categoria; semplici
+  function kindList(k, shown, q) {
     if (k === 'regno') {
-      html = shown.map(f => {
+      return shown.map(f => {
         const p = f.properties, ms = members(f.id), a = ms.reduce((s, m) => s + Geo.area(m.geometry), 0);
         return `<div class="row k-row${p.id === selected ? ' sel' : ''}" data-id="${esc(p.id)}">
           <label class="sw big" style="--c:${p.color}" title="Cambia colore"><input type="color" value="${p.color}" data-color="${esc(p.id)}"></label>
           <div class="nm"><b>${esc(p.name || '—')}</b><span>${ms.length} ${ms.length === 1 ? 'marca' : 'marche'}${a ? ' · ' + fmtArea(a) : ''}</span></div>
           <button class="ib sm" data-act="draw-marca" data-kid="${esc(p.id)}" title="Disegna una nuova marca di ${esc(p.name)}">${ICONS.plus}</button></div>`;
       }).join('');
-    } else if (KINDS[k].hasKingdom) {
+    }
+    if (KINDS[k].hasKingdom) {
       const groups = [...kingdoms().map(kf => ({ id: kf.id, name: kf.properties.name, color: kf.properties.color })), { id: '', name: 'Senza regno', color: '#6b7178' }];
-      html = groups.map(gr => {
+      return groups.map(gr => {
         const rows = shown.filter(f => { const ks = Model.kingdomIds(f.properties); return gr.id ? ks.includes(gr.id) : !ks.length; });
         if (!rows.length && (q || k === 'localita' || !gr.id)) return '';
         const isCol = collapsed.has(k + gr.id);
@@ -225,19 +239,13 @@ const UI = (() => {
           <div class="grp-h" data-grp="${esc(gr.id)}"><i class="sw" style="--c:${gr.color}"></i><span>${esc(gr.name)}</span><em>${rows.length}</em></div>
           <div class="grp-b">${rows.map(f => rowHtml(f)).join('') || '<div class="drop-hint">Trascina qui</div>'}</div></div>`;
       }).join('');
-    } else if (KINDS[k].subtypes) {
-      const subs = Object.entries(KINDS[k].subtypes);
-      html = subs.map(([sk, sl]) => {
-        const rows = shown.filter(f => f.properties.subtype === sk);
-        return rows.length ? `<div class="grp"><div class="grp-h plain"><span>${esc(sl)}</span><em>${rows.length}</em></div><div class="grp-b">${rows.map(f => rowHtml(f)).join('')}</div></div>` : '';
-      }).join('') + (() => {
-        const rest = shown.filter(f => !KINDS[k].subtypes[f.properties.subtype]);
-        return rest.length ? `<div class="grp"><div class="grp-h plain"><span>Altro</span><em>${rest.length}</em></div><div class="grp-b">${rest.map(f => rowHtml(f)).join('')}</div></div>` : '';
-      })();
-    } else {
-      html = shown.map(f => rowHtml(f)).join('');
     }
-    box.innerHTML = html || `<div class="empty">${q ? 'Nessun risultato' : `Nessun${k === 'regno' || k === 'territorio' || k === 'continente' ? ' ' : 'a '}${KINDS[k].label.toLowerCase()} — usa il pulsante qui sopra per crearne ${k === 'regno' || k === 'territorio' || k === 'continente' ? 'uno' : 'una'}.`}</div>`;
+    if (KINDS[k].subtypes) {
+      const grp = (label, rows) => rows.length ? `<div class="grp"><div class="grp-h plain"><span>${esc(label)}</span><em>${rows.length}</em></div><div class="grp-b">${rows.map(f => rowHtml(f)).join('')}</div></div>` : '';
+      return Object.entries(KINDS[k].subtypes).map(([sk, sl]) => grp(sl, shown.filter(f => f.properties.subtype === sk))).join('') +
+        grp('Altro', shown.filter(f => !KINDS[k].subtypes[f.properties.subtype]));
+    }
+    return shown.map(f => rowHtml(f)).join('');
   }
   const queueList = () => { if (!listQueued) { listQueued = true; requestAnimationFrame(() => { renderList(); updateRail(); }); } };
 
@@ -247,9 +255,10 @@ const UI = (() => {
       const act = e.target.closest('[data-act]');
       if (act) {
         const a = act.dataset.act;
-        if (a === 'vis') { Render.setHidden(panel, !Render.state.hidden.has(panel)); renderList(); updateRail(); }
-        else if (a === 'lock') { Render.setLocked(panel, !Render.state.locked.has(panel)); renderList(); }
-        else if (a === 'new') newEntity(panel, act);
+        const kinds = panelDef(panel).kinds;   // nascondi / blocca valgono per tutti i tipi del pannello
+        if (a === 'vis') { const on = !kinds.every(k => Render.state.hidden.has(k)); kinds.forEach(k => Render.setHidden(k, on)); renderList(); updateRail(); }
+        else if (a === 'lock') { const on = !kinds.every(k => Render.state.locked.has(k)); kinds.forEach(k => Render.setLocked(k, on)); renderList(); }
+        else if (a === 'new') newEntity(act.dataset.kind || kinds[0], act);
         else if (a === 'draw-marca') { e.stopPropagation(); drawFor(act.dataset.kid); }
         return;
       }
@@ -327,12 +336,14 @@ const UI = (() => {
       select(id, { focus: true });
       return;
     }
+    if (Tools.tool !== 'select') Tools.set('select');   // il menu Crea non va filtrato dallo strumento precedente
     Settings.target = k; Settings.save();
     renderToolstrip();
     const geoms = KINDS[k].geom;
     const opts = [];
     if (geoms.includes('Polygon')) opts.push(['freehand', 'Area a mano libera', 'F'], ['polygon', 'Area per punti', 'P']);
     if (k === 'territorio') opts.push(['polyline', 'DMZ (linea per punti)', 'D']);
+    else if (k === 'linea') opts.push(['polyline', 'Linea per punti', 'D']);
     else if (geoms.includes('LineString')) opts.push(['line', 'Linea a mano libera (fiume)', 'L'], ['polyline', 'Fiume o canale per punti', 'D']);
     if (geoms.includes('Point')) opts.push(['point', 'Punto sulla mappa', 'K']);
     if (opts.length === 1) { Tools.set(opts[0][0]); return; }
@@ -371,7 +382,6 @@ const UI = (() => {
     const tools = ['select', 'freehand', 'polygon', 'line', 'polyline', 'point', null, 'add', 'sub', 'redraw'];
     $('#tsTools').innerHTML = tools.map(t => t ? `<button class="tool" data-tool="${t}" title="${esc(Tools.META[t].name)} (${Tools.META[t].key})">${ICONS[t]}</button>` : '<span class="ts-sep"></span>').join('');
     $('#tsTools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) Tools.set(b.dataset.tool); });
-    $('#optTarget').innerHTML = KIND_ORDER.filter(k => k !== 'regno').map(k => `<option value="${k}">${esc(KINDS[k].label)}</option>`).join('');
     $('#optTarget').addEventListener('change', e => { Settings.target = e.target.value; Settings.save(); renderToolstrip(); onTool(Tools.tool); });
     $('#optKingdom').addEventListener('change', e => {
       if (e.target.value === '__new') {
@@ -382,6 +392,9 @@ const UI = (() => {
       renderToolstrip();
     });
     $('#optOverlap').addEventListener('change', e => { Settings.overlap = e.target.value; Settings.save(); });
+    // prossima linea ferroviaria: categoria (ricordata) e colore (solo per la prossima, poi torna al primo libero)
+    $('#optRailType').addEventListener('change', e => { Settings.railType = e.target.value; Settings.save(); });
+    $('#optRailColor').addEventListener('input', e => { Settings.railColor = e.target.value; Settings.save(); });
     $('#optSnap').innerHTML = ICONS.magnet + '<span>Aggancio</span>';
     $('#optLink').innerHTML = ICONS.link + '<span>Confini collegati</span>';
     $('#optSnap').addEventListener('click', () => { Settings.snap = !Settings.snap; Settings.save(); renderToolstrip(); Render.setEditing(Tools.tool === 'select'); });
@@ -391,8 +404,20 @@ const UI = (() => {
     renderToolstrip();
   }
 
-  function renderToolstrip() {
+  // Menu Crea: solo i tipi compatibili con lo strumento di disegno attivo. Se il tipo scelto non lo è, si passa a
+  // quello tipico dello strumento (aree → marca, linea a mano libera → fiume, per punti → territorio, punto → località)
+  const TOOL_TARGET = { freehand: ['Polygon', 'marca'], polygon: ['Polygon', 'marca'], line: ['LineString', 'acqua'],
+    polyline: ['LineString', 'territorio'], point: ['Point', 'localita'] };
+  function targetOptions() {
+    const t = TOOL_TARGET[Tools.tool];
+    const ok = KIND_ORDER.filter(k => k !== 'regno' && (!t || KINDS[k].geom.includes(t[0])));
+    if (t && !ok.includes(Settings.target)) { Settings.target = t[1]; Settings.save(); }
+    $('#optTarget').innerHTML = ok.map(k => `<option value="${k}">${esc(KINDS[k].label)}</option>`).join('');
     $('#optTarget').value = Settings.target;
+  }
+
+  function renderToolstrip() {
+    targetOptions();
     const ks = kingdoms();
     if (Settings.kingdom && !Store.get(Settings.kingdom)) Settings.kingdom = null;
     $('#optKingdom').innerHTML = '<option value="">— nessuno —</option>' +
@@ -402,11 +427,15 @@ const UI = (() => {
     $('#optKingdomWrap').hidden = !KINDS[Settings.target]?.hasKingdom || Settings.target === 'localita';
     $('#optOverlap').value = Settings.overlap;
     $('#optOverlapWrap').hidden = !KINDS[Settings.target]?.political;
+    $('#optRailWrap').hidden = Settings.target !== 'linea';
+    $('#optRailType').value = Settings.railType;
+    $('#optRailColor').value = Settings.railColor || Model.nextColor('linea');
     $('#optSnap').classList.toggle('on', Settings.snap);
     $('#optLink').classList.toggle('on', Settings.link);
   }
 
   function onTool(t) {
+    renderToolstrip();
     document.querySelectorAll('#tsTools .tool').forEach(b => b.classList.toggle('active', b.dataset.tool === t));
     const needSel = !(selected && Geo.isPoly(Store.get(selected)?.geometry));
     ['add', 'sub', 'redraw'].forEach(x => { const b = $(`#tsTools [data-tool="${x}"]`); if (b) b.disabled = needSel; });
@@ -446,7 +475,7 @@ const UI = (() => {
     if (['add', 'sub', 'redraw'].includes(Tools.tool) && !(id && Geo.isPoly(Store.get(id).geometry))) Tools.set('select');
     if (id) {
       const f = Store.get(id), k = f.properties.kind;
-      if (k !== panel) showPanel(k);
+      if (panelOf(k) !== panel) showPanel(k);
       if (k === 'regno') Settings.kingdom = id;
       else if (KINDS[k].political && f.properties.kingdom) Settings.kingdom = f.properties.kingdom;
       Settings.save();
@@ -581,7 +610,7 @@ const UI = (() => {
         <span class="muted">da 1 a 10</span>
         <label class="mini"><input type="checkbox" data-l="repeatAuto"${repAuto ? ' checked' : ''}> auto</label></div></div>`;
     }
-    if (p.kind !== 'localita') {
+    if (!K.pointLabel) {
       h += `<div class="fld"><span class="fl">Rotazione <em id="rotVal">${rotAuto ? 'auto' : lab.rotation + '°'}</em></span>
         <div class="rot">${dialHtml(lab.rotation || 0, rotAuto)}
         <label class="mini"><input type="checkbox" data-l="rotAuto"${rotAuto ? ' checked' : ''}> auto</label></div></div>`;
@@ -633,9 +662,9 @@ const UI = (() => {
   function inspectorOverview() {
     const counts = KIND_ORDER.map(k => `<div><b>${Store.all(k).length}</b><span>${esc(KINDS[k].plural.toLowerCase())}</span></div>`).join('');
     const keys = [['V', 'Seleziona e modifica confini'], ['F', 'Area a mano libera'], ['P', 'Area per punti'], ['L', 'Fiume a mano libera'], ['D', 'Linea per punti (DMZ)'],
-      ['K', 'Località'], ['B', 'Pennello: aggiungi area'], ['E', 'Gomma: togli area'], ['R', 'Ridisegna confine'],
+      ['K', 'Punto (località, stazione)'], ['B', 'Pennello: aggiungi area'], ['E', 'Gomma: togli area'], ['R', 'Ridisegna confine'],
       ['Spazio', 'Tieni premuto per spostare la mappa'], ['Esc', 'Annulla / deseleziona'], ['Canc', 'Elimina la selezione'],
-      ['Z', 'Centra la selezione'], ['G', 'Griglia dei chunk'], ['[ / ]', 'Chiudi / apri i pannelli laterali'], ['Ctrl+Z / Ctrl+Y', 'Annulla / ripeti'], ['Ctrl+S', 'Salva'], ['Ctrl+K', 'Cerca'], ['1 – 8', 'Cambia pannello']];
+      ['Z', 'Centra la selezione'], ['G', 'Griglia dei chunk'], ['[ / ]', 'Chiudi / apri i pannelli laterali'], ['Ctrl+Z / Ctrl+Y', 'Annulla / ripeti'], ['Ctrl+S', 'Salva'], ['Ctrl+K', 'Cerca'], ['1 – 9', 'Cambia pannello']];
     return `<div class="ins-head plain"><div class="ins-kind"><span>Nessuna selezione</span></div></div>
       <div class="ins-body"><section><h3>La mappa</h3><div class="stats">${counts}</div></section>
       <section><h3>Come si usa</h3><p class="muted">Passa col mouse sulla mappa per evidenziare le entità, clicca per selezionarle:
@@ -932,7 +961,7 @@ const UI = (() => {
       if (e.key === ']') { setSide('right', !Settings.rightOpen); return; }
       if (TOOLKEYS[key]) { Tools.set(TOOLKEYS[key]); return; }
       const n = parseInt(e.key, 10);
-      if (n >= 1 && n <= KIND_ORDER.length) showPanel(KIND_ORDER[n - 1]);
+      if (n >= 1 && n <= PANELS.length) showPanel(PANELS[n - 1].id);
     });
   }
 
