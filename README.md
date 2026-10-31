@@ -63,6 +63,11 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   - clic sull'ultimo punto, doppio clic o Invio = fine;
   - un capolinea fuori da una stazione **crea la stazione** (da rinominare).
 
+  Nell'**ispettore**: una linea mostra capolinea (o *Circolare*), le fermate in ordine con la progressiva in km e la
+  lunghezza di ogni tratto, la lunghezza totale e un avviso se un capolinea non è una stazione; una stazione mostra
+  le linee che ci fermano (e se è un interscambio), con la fermata precedente e la successiva e la distanza lungo il
+  binario. Le distanze sono in km con i blocchi tra parentesi (1 blocco = 1 m); clic su un nome per andarci.
+
   Modificando la rete:
   - **spostare una stazione** (trascinandola o dalle coordinate) sposta con lei le linee che ci fermano;
     **trascinare un vertice-fermata** di una linea sposta anche la stazione e le altre linee che ci fermano;

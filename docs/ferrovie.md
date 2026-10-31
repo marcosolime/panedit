@@ -1,7 +1,7 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **fasi 1 e 2 completate**: il formato del file è stabile; fasi 3–6 da fare (31/10/2026). Le nuove
+Stato: **fasi 1–3 completate** (il formato del file è stabile dalla fase 2); fasi 4–6 da fare (31/10/2026). Le nuove
 funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
@@ -201,7 +201,15 @@ In [tools.js](../viewer/js/tools.js):
 **Fatta quando**: spostare, inserire ed eliminare stazioni non lascia mai linee staccate dalle loro fermate, e
 Ctrl+Z annulla ogni operazione in un passo solo.
 
-### Fase 3: ispettori
+### Fase 3: ispettori ✔
+
+**Fatta** (31/10/2026). In [rail.js](../viewer/js/rail.js): `Rail.lineInfo` (fermate con la progressiva lungo il
+binario, segmenti, nell'anello il tratto di chiusura, lunghezza totale = `Geo.length`, avvisi sui capolinea) e
+`Rail.stationInfo` (per ogni linea che ci ferma, fermata precedente e successiva con la lunghezza del segmento,
+girando intorno negli anelli). In [ui.js](../viewer/js/ui.js) le sezioni *Fermate* (linea) e *Linee* (stazione,
+con l'etichetta *interscambio*), prima di *Geometria*; ogni nome porta all'entità. Formato `fmtKm`: per esempio
+`3,42 km (3.420 blocchi)`, con il separatore delle migliaia italiano (punto) come nel resto dell'editor.
+
 
 - **Linea**: nome, colore, categoria (menu Categoria già esistente); "Circolare" al posto dei capolinea se è un anello; fermate in ordine con il
   chilometraggio progressivo (in un anello la prima fermata compare una volta e il totale comprende il tratto di

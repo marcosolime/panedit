@@ -7,6 +7,8 @@ const UI = (() => {
   const nf = (v, d = 0) => v.toLocaleString('it-IT', { maximumFractionDigits: d });
   const fmtArea = a => a >= 1e5 ? `${nf(a / 1e6, 2)} km²` : `${nf(Math.round(a))} blocchi²`;
   const fmtLen = l => l >= 1000 ? `${nf(l / 1000, 2)} km` : `${nf(Math.round(l))} blocchi`;
+  // distanze ferroviarie: km con i blocchi tra parentesi (1 blocco = 1 m)
+  const fmtKm = b => `${nf(b / 1000, 2)} km (${nf(Math.round(b))} blocchi)`;
   const typing = e => {
     const t = e.target;
     return !!t && (t.isContentEditable || (/^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) && !/^(range|checkbox|color|button)$/.test(t.type)));
@@ -516,6 +518,40 @@ const UI = (() => {
       <g class="needle" transform="rotate(${rot})"><line x1="0" y1="5" x2="0" y2="-40"/><circle r="3.5"/></g></svg>`;
   }
 
+  // Ispettore di una linea ferroviaria: capolinea (o "Circolare"), fermate in ordine con la progressiva e la
+  // lunghezza di ogni segmento, lunghezza totale, avvisi sui capolinea
+  function lineSection(f) {
+    const info = Rail.lineInfo(f), st = info.stops, name = s => esc(s.station.properties.name || '—');
+    const stop = (s, at, cls = '') => `<li class="stop${cls}"><button class="link" data-goto="${esc(s.station.id)}">${cls ? '↺ ' : ''}${name(s)}</button>
+      <em>${nf(at / 1000, 2)} km</em></li>`;
+    const seg = k => `<li class="seg">${fmtKm(info.segments[k].length)}</li>`;
+    let h = `<section><h3>Fermate</h3>
+      <div class="stats"><div><b>${info.ring ? 'Circolare' : st.length ? `${name(st[0])} → ${name(st.at(-1))}` : '—'}</b>
+        <span>${info.ring ? 'linea' : 'capolinea'}</span></div><div><b>${st.length}</b><span>fermate</span></div></div>
+      <div class="stats one"><div><b>${fmtKm(info.total)}</b><span>lunghezza totale${info.ring ? ', chiusura compresa' : ''}</span></div></div>`;
+    h += info.warnings.map(w => `<p class="warn-msg">${esc(w)}</p>`).join('');
+    if (st.length) {
+      h += `<ol class="stops">${st.map((s, k) => (k ? seg(k - 1) : '') + stop(s, s.at)).join('')}
+        ${info.ring && st.length > 1 ? seg(info.segments.length - 1) + stop(st[0], info.total + st[0].at, ' back') : ''}</ol>`;
+    } else h += '<p class="muted">Nessuna fermata: clic su una stazione mentre si traccia, o posa una stazione sul binario.</p>';
+    return h + '</section>';
+  }
+
+  // Ispettore di una stazione: le linee che ci fermano, con le fermate adiacenti e la distanza del segmento
+  function stationSection(f) {
+    const ls = Rail.stationInfo(f);
+    let h = `<section><h3>Linee${ls.length > 1 ? ' <em class="tag">interscambio</em>' : ''}</h3>`;
+    if (!ls.length) return h + '<p class="muted">Nessuna linea ferma qui: posa la stazione su un binario o traccia una linea che ci passi.</p></section>';
+    const adj = (dir, a) => `<div><span class="dir">${dir}</span>${a
+      ? `<button class="link" data-goto="${esc(a.station.id)}">${esc(a.station.properties.name || '—')}</button><em>${fmtKm(a.length)}</em>`
+      : '<span class="muted">capolinea</span>'}</div>`;
+    h += ls.map(({ line, prev, next }) => `<div class="sline" style="--c:${Render.colorOf(line)}">
+        <div class="sline-h"><i class="sw"></i><button class="link" data-goto="${esc(line.id)}">${esc(line.properties.name || '—')}</button>
+        <span class="muted">${esc(KINDS.linea.subtypes[line.properties.subtype] || '')}</span></div>
+        <div class="adj">${adj('←', prev)}${adj('→', next)}</div></div>`).join('');
+    return h + '</section>';
+  }
+
   function field(label, control, cls = '') {
     return `<label class="fld ${cls}"><span class="fl">${label}</span>${control}</label>`;
   }
@@ -624,6 +660,10 @@ const UI = (() => {
     }
     h += '</section>';
     }
+
+    // ferrovie: fermate di una linea, linee di una stazione
+    if (p.kind === 'linea' && g?.type === 'LineString') h += lineSection(f);
+    if (p.kind === 'stazione' && g) h += stationSection(f);
 
     // geometria
     if (g) {

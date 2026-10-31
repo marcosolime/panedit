@@ -356,6 +356,23 @@ path.pe-soft.pe-selected { filter: none; }
 .stats div { padding: 8px 10px; border-radius: 7px; background: var(--surface-2); display: flex; flex-direction: column; gap: 2px; }
 .stats b { font-weight: 600; font-size: 14px; }
 .stats span { color: var(--muted); font-size: 11px; }
+.stats.one { grid-template-columns: 1fr; }
+/* ferrovie: fermate di una linea, linee di una stazione */
+.warn-msg { margin: 0 0 8px; padding: 6px 9px; border-radius: 6px; background: rgba(233, 168, 74, .12); color: var(--warn); font-size: 12px; }
+.stops { list-style: none; margin: 0; padding: 0 0 0 4px; }
+.stops .stop { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; position: relative; padding-left: 16px; }
+.stops .stop::before { content: ''; position: absolute; left: 0; top: 50%; width: 8px; height: 8px; margin-top: -4px; border-radius: 50%; background: var(--surface); box-shadow: 0 0 0 2px var(--text); }
+.stops .stop em, .adj em { font-style: normal; color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stops .stop.back .link { color: var(--muted); }
+.stops .seg { margin-left: 3px; padding: 3px 0 3px 17px; border-left: 2px solid var(--line-2); color: var(--faint); font-size: 11px; }
+.ins-body h3 .tag { margin-left: 6px; padding: 1px 6px; border-radius: 8px; background: var(--surface-3); color: var(--text); font-style: normal; text-transform: none; letter-spacing: 0; }
+.sline { margin-bottom: 10px; padding: 6px 9px; border-radius: 7px; background: var(--surface-2); box-shadow: inset 3px 0 0 var(--c); }
+.sline-h { display: flex; align-items: center; gap: 7px; margin-bottom: 3px; }
+.sline-h .link { color: var(--text); font-weight: 600; }
+.sline-h .muted { margin-left: auto; font-size: 11px; }
+.adj div { display: flex; align-items: baseline; gap: 6px; font-size: 12px; }
+.adj .dir { width: 14px; color: var(--muted); }
+.adj em { margin-left: auto; }
 .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; height: 32px; padding: 0 10px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); color: var(--text); font-size: 12px; }
 .btn:hover { border-color: var(--line-2); background: var(--surface-3); }
 .btn svg { width: 15px; height: 15px; color: var(--accent); }
