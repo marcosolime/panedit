@@ -1,8 +1,8 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **progettazione conclusa, sviluppo non iniziato** (30/10/2026; aggiornato il 31/10/2026 dopo le nuove
-funzioni di [new_features.md](new_features.md), che hanno già preparato alcuni pezzi: vedi sotto).
+Stato: **progettazione conclusa, decisioni di sviluppo prese, sviluppo non iniziato** (31/10/2026). Le nuove
+funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
 
@@ -30,6 +30,18 @@ funzioni di [new_features.md](new_features.md), che hanno già preparato alcuni 
 Il repo non è ancora stato distribuito al Consiglio: non esistono mappe da migrare, quindi il formato si estende
 restando alla `version: 1`.
 
+## Decisioni per lo sviluppo (31/10/2026)
+
+| Tema | Decisione |
+|---|---|
+| Pannello | **un solo pannello "Ferrovie"** (icona del treno) con due sezioni, *Linee* e *Stazioni*: va adattata la logica attuale "un pannello per tipo", compresi i tasti 1–9 |
+| Creare una stazione | **strumento Punto (K)**: crea una stazione se **Crea** è su *Stazione*, altrimenti una località |
+| Menu Crea | segue lo strumento attivo e propone **solo i tipi compatibili**: con Punto solo *Località* e *Stazione*; con le linee solo i tipi che accettano linee; con le aree solo quelli che accettano aree |
+| Tracciare una linea | **strumento Linea per punti (D)** con **Crea** su *Linea ferroviaria*: in quel caso si applicano le regole ferroviarie (fermate, anello, stazioni ai capolinea). "+ Nuova linea" nel pannello lo attiva già impostato |
+| Aspetto delle stazioni | **cerchi con il nome accanto, come le località**: stessa etichetta (posizione del nome a destra / sinistra / sopra / sotto con `label.anchor`, dimensione, "Mostra il nome") e stesso comportamento allo zoom; interscambi bianchi con il bordo nero |
+| Nome delle linee sulla mappa | **mostrato**, lungo il tracciato come per fiumi e DMZ (ripetizioni automatiche o da 1 a 10 con *Ripetizioni del nome*, dimensione, rotazione); si nasconde con **"Mostra il nome sulla mappa"** come per tutte le etichette |
+| Categoria delle linee | **`subtype`** (`direttissima` · `fermate`) con il meccanismo esistente: menu Categoria nell'ispettore e gruppi nel pannello già pronti; default in `Model.fitProps` |
+
 ## Modello dati
 
 Due nuovi `kind` in `KINDS` ([viewer/js/model.js](../viewer/js/model.js)), aggiunti anche a `KIND_ORDER`.
@@ -37,7 +49,7 @@ Due nuovi `kind` in `KINDS` ([viewer/js/model.js](../viewer/js/model.js)), aggiu
 | `kind` | Geometria | Proprietà specifiche |
 |---|---|---|
 | `stazione` | Point | — (in fase 6: `schema`) |
-| `linea` | LineString | `color`, `category`: `direttissima` · `fermate` |
+| `linea` | LineString | `color`, `subtype`: `direttissima` · `fermate` |
 
 Proprietà comuni come per gli altri tipi: `id`, `name`, `notes`, `label`.
 
@@ -47,7 +59,7 @@ Proprietà comuni come per gli altri tipi: `id`, `name`, `notes`, `label`.
   "geometry": { "type": "Point", "coordinates": [1250, -340] } },
 { "type": "Feature", "id": "linea-costiera-p2x8vd",
   "properties": { "id": "linea-costiera-p2x8vd", "kind": "linea", "name": "Costiera", "color": "#c4101c",
-                  "category": "fermate", "notes": "", "label": { … } },
+                  "subtype": "fermate", "notes": "", "label": { … } },
   "geometry": { "type": "LineString", "coordinates": [[1250, -340], [1400, -360], [1610, -300], …] } }
 ```
 
@@ -86,20 +98,24 @@ facoltativo).
 
 ### Fase 1: stazioni e linee sulla mappa
 
-- `stazione` e `linea` in `KINDS` e `KIND_ORDER`, icona del treno in [icons.js](../viewer/js/icons.js), pannello
-  "Ferrovie". Da valutare: rappresentare la categoria con il meccanismo `subtype` / `subtypes` già esistente
-  (che ispettore e pannelli gestiscono da soli, raggruppando anche le righe del pannello per categoria) invece del
-  campo nuovo `category`. I valori di default e la coerenza con la geometria si aggiungono in `Model.fitProps`,
-  come per le DMZ.
-- **Strumento Stazione**: un clic sulla mappa crea una stazione (si può partire da `createPoint` e dallo
-  strumento Punto). Oggi lo strumento Punto (K) crea **solo località** e nessun altro tipo accetta `Point`:
-  `stazione` sarà il secondo tipo puntuale, con uno strumento suo (o K che segue il menu **Crea**). Va tenuto
-  conto anche di `normalize`, che porta a località i punti di un tipo che non ammette `Point`.
-- **Strumento Linea**: disegno per punti con aggancio alle stazioni. **Esiste già una base**: lo strumento
-  *Linea per punti* (D, `polyline` in [tools.js](../viewer/js/tools.js)), con disegno per punti di
-  Leaflet-Geoman, aggancio, Invio per finire (`finishPolygon`), creazione tramite `Edit.createLine(want, g,
-  fallback)` e `targetKind` con ripiego per le linee. Da aggiungere sopra: le regole qui sotto (fermate,
-  chiusura dell'anello, stazioni automatiche ai capolinea).
+- `stazione` (geom `Point`) e `linea` (geom `LineString`, `subtypes: { direttissima, fermate }`, default in
+  `Model.fitProps`) in `KINDS` e `KIND_ORDER`, icona del treno in [icons.js](../viewer/js/icons.js).
+- **Pannello "Ferrovie"**: una sola voce nella colonna di sinistra per i due tipi, con le sezioni *Linee*
+  (raggruppate per categoria) e *Stazioni*, e i pulsanti "+ Nuova linea" / "+ Nuova stazione". Oggi
+  [ui.js](../viewer/js/ui.js) ha un pannello per tipo (`panel`, `showPanel`, `updateRail`, tasti 1–8 su
+  `KIND_ORDER`, nascondi/blocca per tipo): serve un elenco di pannelli separato da `KIND_ORDER`, in cui
+  "Ferrovie" raggruppa `linea` e `stazione` (nascondi e blocca agiscono su entrambi).
+- **Stazione con lo strumento Punto (K)**: crea una stazione se **Crea** è su *Stazione*, altrimenti una località
+  (`createPoint` / `targetKind` funzionano già così, basta che `stazione` ammetta `Point`).
+- **Menu Crea filtrato**: propone solo i tipi compatibili con lo strumento attivo (Punto → Località, Stazione;
+  linee → Acque, Territorio, Linea ferroviaria; aree → i tipi con poligoni). Cambiando strumento, se il tipo
+  scelto non è compatibile si passa al primo compatibile. Vale anche per gli strumenti esistenti.
+- **Aggancio alle stazioni**: oggi tutti i punti sono creati con `snapIgnore: true` (`makeLabel` in
+  [render.js](../viewer/js/render.js)), quindi Leaflet-Geoman non li aggancerebbe: per le stazioni va tolto.
+- **Strumento Linea = Linea per punti (D)** con **Crea** su *Linea ferroviaria*. Esiste già: disegno per punti di
+  Leaflet-Geoman, aggancio, Invio per finire (`finishPolygon`), creazione con `Edit.createLine(want, g, fallback)`.
+  Da aggiungere, solo quando si crea una `linea`, le regole qui sotto (fermate, chiusura dell'anello, stazioni
+  automatiche ai capolinea).
   - Clic su una stazione: fermata. Clic altrove: curva del binario.
   - Invio o doppio clic: fine della linea.
   - Clic sulla stazione di partenza: chiude la linea circolare e termina il disegno (non è ambiguo, perché una
@@ -108,13 +124,17 @@ facoltativo).
   - La categoria e il colore delle nuove linee si scelgono dalla barra degli strumenti, come oggi il regno delle
     nuove marche.
 - **Disegno**: linee con il loro colore e uno stile per categoria (per esempio direttissime più spesse);
-  stazioni come cerchi, interscambi bianchi con il bordo nero.
+  stazioni come cerchi con il **nome accanto, come le località** (stesso markup `pe-label-localita` con
+  pallino e testo, `label.anchor` e menu "Posizione del nome" nell'ispettore, stessa visibilità allo zoom in
+  `updateLabels`), con uno stile proprio del cerchio; interscambi bianchi con il bordo nero. In `render.js` /
+  `ui.js` i controlli `kind === 'localita'` vanno estesi alle stazioni (meglio con una proprietà in `KINDS`,
+  per esempio `pointLabel: true`), e `defaultLabel` deve dare `anchor: 'right'` anche alle stazioni.
 - `Geo.countVertices` esteso alle LineString chiuse: oggi conta due volte il vertice di chiusura, lo stesso
   problema già corretto per gli anelli dei poligoni.
-- `normalize` e `Store.load`: valori di default per `category`.
+- `normalize` e `Store.load`: valori di default per `subtype` (già coperti da `Model.fitProps`).
 - Controllo della versione del file: l'editor rifiuta di **salvare** un file con `metadata.version` più recente
   di quella che conosce (lo apre e avvisa). Non serve oggi, ma protegge le mappe del Consiglio dalla prima
-  modifica futura del formato.
+  modifica futura del formato. Oggi [io.js](../viewer/js/io.js) non legge `metadata.version`.
 - README: nuovi `kind` nella sezione "Formato del file" e nuovi strumenti nella tabella dei tasti.
 
 **Fatta quando**: si traccia una rete di prova (almeno 5 stazioni, 2 linee con un interscambio, 1 linea
@@ -139,7 +159,7 @@ Ctrl+Z annulla ogni operazione in un passo solo.
 
 ### Fase 3: ispettori
 
-- **Linea**: nome, colore, categoria; "Circolare" al posto dei capolinea se è un anello; fermate in ordine con il
+- **Linea**: nome, colore, categoria (menu Categoria già esistente); "Circolare" al posto dei capolinea se è un anello; fermate in ordine con il
   chilometraggio progressivo (in un anello la prima fermata compare una volta e il totale comprende il tratto di
   chiusura); lunghezza totale; avvisi se un capolinea o il punto di chiusura non è una stazione.
 - **Stazione**: le linee che ci fermano e, per ognuna, le fermate adiacenti con la distanza del segmento;
@@ -220,9 +240,10 @@ Il progetto resta com'è: JavaScript puro senza compilazione, librerie copiate i
   (LineString), e lo stesso succede a una feature la cui geometria non è ammessa dal suo `kind`: le stazioni e
   le linee devono sempre avere il loro `kind` scritto nel file, e `KINDS` deve ammettere le loro geometrie
   (`Point` per `stazione`, `LineString` per `linea`).
-- **Etichette delle linee.** Ogni LineString riceve il nome **ripetuto lungo il tracciato** in base alla
-  lunghezza (`labelPlacements` in [render.js](../viewer/js/render.js), con `Geo.lineAt` in
-  [geo.js](../viewer/js/geo.js) al posto del vecchio `lineMid`), come fiumi e DMZ. Per le linee ferroviarie va
-  deciso se mostrarlo e se ripeterlo: per escluderle basta un controllo sul `kind` in `labelPlacements`.
+- **Etichette delle linee.** Deciso: il nome delle linee ferroviarie si mostra lungo il tracciato, come per
+  fiumi e DMZ (`labelPlacements` in [render.js](../viewer/js/render.js), `Geo.lineAt` in
+  [geo.js](../viewer/js/geo.js), `label.repeat` per il numero di copie), e si nasconde con "Mostra il nome sulla
+  mappa". Non serve codice nuovo: basta uno stile CSS per `pe-label-linea` (per esempio nel colore della linea)
+  e, se serve, un intervallo di visibilità in `PX`.
 - **Pane e livelli.** Le DMZ hanno pane propri (`dmzBand`, `dmz`) sopra le marche; le ferrovie andranno in un
   pane loro, probabilmente sopra le DMZ e sotto le etichette (`PANES` in `render.js`).

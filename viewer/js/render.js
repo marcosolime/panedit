@@ -163,7 +163,10 @@ const Render = (() => {
   // Sulle linee il nome si ripete lasciando tra una copia e l'altra almeno REPEAT_GAP volte la sua larghezza
   const REPEAT_GAP = 3.5, REPEAT_MAX = 6;
 
-  // Posizioni dell'etichetta: una sola, tranne sulle linee lunghe senza posizione manuale
+  // Numero automatico di copie del nome su una linea (label.repeat = null)
+  const autoRepeat = f => clamp(Math.floor(Geo.lineAt(f.geometry, 0.5).length / (textWidth(f) * REPEAT_GAP)), 1, REPEAT_MAX);
+
+  // Posizioni dell'etichetta: una sola, tranne sulle linee (copie automatiche o label.repeat) senza posizione manuale
   function labelPlacements(f) {
     const p = f.properties, g = f.geometry;
     let pos = p.label.pos, rot = p.label.rotation;
@@ -172,7 +175,7 @@ const Render = (() => {
     else if (Geo.isLine(g)) {
       const span = textWidth(f), mid = Geo.lineAt(g, 0.5, span);
       if (pos) return [{ pos, rot: rot ?? mid.angle }];
-      const n = clamp(Math.floor(mid.length / (span * REPEAT_GAP)), 1, REPEAT_MAX);
+      const n = p.label.repeat ? clamp(Math.round(p.label.repeat), 1, 10) : autoRepeat(f);
       return Array.from({ length: n }, (_, i) => {
         const m = n === 1 ? mid : Geo.lineAt(g, (i + 1) / (n + 1), span);
         return { pos: m.pos, rot: rot ?? m.angle };
@@ -506,7 +509,7 @@ const Render = (() => {
 
   return {
     init, hooks, state, select, setHover, setGroup, setEditing, zoomTo, boundsOf, setHidden, setLocked,
-    colorOf, kingdomOf, kingdomsOf, kingdomShape, autoSize, restyleAll, updateLabels, esc, mix,
+    colorOf, kingdomOf, kingdomsOf, kingdomShape, autoSize, autoRepeat, restyleAll, updateLabels, esc, mix,
     get map() { return map; }, item: id => items.get(id)
   };
 })();

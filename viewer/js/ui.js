@@ -573,6 +573,14 @@ const UI = (() => {
         <div class="rng"><input type="range" min="0" max="${SIZE_STEPS}" data-l="size" value="${sizeToSlider(size)}">
         <input type="number" class="num" data-l="sizeNum" min="${SIZE_MIN}" max="${SIZE_FREE_MAX}" step="${sizeStep(size)}" value="${size}">
         <label class="mini"><input type="checkbox" data-l="sizeAuto"${auto ? ' checked' : ''}> auto</label></div></div>`;
+    if (Geo.isLine(g)) {
+      // copie del nome distribuite lungo la linea: automatiche (in base alla lunghezza) o da 1 a 10
+      const repAuto = lab.repeat == null, rep = repAuto ? Render.autoRepeat(f) : lab.repeat;
+      h += `<div class="fld"><span class="fl">Ripetizioni del nome <em>${repAuto ? 'auto' : ''}</em></span>
+        <div class="rng"><input type="number" class="num" data-l="repeat" min="1" max="10" step="1" value="${rep}">
+        <span class="muted">da 1 a 10</span>
+        <label class="mini"><input type="checkbox" data-l="repeatAuto"${repAuto ? ' checked' : ''}> auto</label></div></div>`;
+    }
     if (p.kind !== 'localita') {
       h += `<div class="fld"><span class="fl">Rotazione <em id="rotVal">${rotAuto ? 'auto' : lab.rotation + '°'}</em></span>
         <div class="rot">${dialHtml(lab.rotation || 0, rotAuto)}
@@ -676,6 +684,13 @@ const UI = (() => {
       } else if (t.dataset.l) {
         const l = t.dataset.l;
         if (l === 'size') return;   // già applicata durante il trascinamento (evento input)
+        if (l === 'repeat') {
+          // a fine digitazione: intero da 1 a 10
+          const n = Math.min(10, Math.max(1, Math.round(+t.value) || 1));
+          t.value = n;
+          setRepeat(n);
+          return;
+        }
         if (l === 'sizeNum') {
           // a fine digitazione: valore riportato nei limiti e arrotondato
           const s = roundSize(Math.min(Math.max(+t.value || SIZE_MIN, SIZE_MIN), SIZE_FREE_MAX));
@@ -687,6 +702,7 @@ const UI = (() => {
           if (l === 'show' || l === 'showKingdom') p.label[l] = t.checked;
           else if (l === 'sizeAuto') p.label.size = t.checked ? null : roundSize(Render.autoSize(Store.get(id)));
           else if (l === 'rotAuto') p.label.rotation = t.checked ? null : 0;
+          else if (l === 'repeatAuto') { p.label.repeat = t.checked ? null : Render.autoRepeat(Store.get(id)); if (!t.checked) p.label.pos = null; }
           else if (l === 'anchor') p.label.anchor = t.value;
         }, { label: 'Etichetta' });
       } else if (t.dataset.c) {
@@ -706,6 +722,15 @@ const UI = (() => {
       const auto = el.querySelector('[data-l="sizeAuto"]'); if (auto) auto.checked = false;
     }
 
+    // ripetizioni del nome su una linea: un numero fisso toglie l'eventuale posizione manuale (altrimenti
+    // resterebbe una sola copia); se c'era, si ridisegna l'ispettore per aggiornare "Posizione manuale"
+    function setRepeat(n) {
+      const id = cur(), hadPos = !!Store.get(id)?.properties.label.pos;
+      const auto = el.querySelector('[data-l="repeatAuto"]'); if (auto) auto.checked = false;
+      upd(p => { p.label.repeat = n; p.label.pos = null; },
+        { quiet: !hadPos, source: 'edit', coalesce: 'repeat:' + id, label: 'Ripetizioni del nome' });
+    }
+
     // margine della DMZ: la fascia si aggiorna mentre si cambia il valore, un solo passo di annullamento
     function setMargin(m) {
       const id = cur();
@@ -717,6 +742,7 @@ const UI = (() => {
     el.addEventListener('input', e => {
       const t = e.target, id = cur();
       if (id && t.dataset.m) { const m = +t.value; if (t.value !== '' && m >= 0) setMargin(Math.round(m)); return; }
+      if (id && t.dataset.l === 'repeat') { const n = +t.value; if (Number.isInteger(n) && n >= 1 && n <= 10) setRepeat(n); return; }
       if (!id || (t.type !== 'range' && t.dataset.l !== 'sizeNum')) return;
       if (t.dataset.l === 'size' || t.dataset.l === 'sizeNum') {
         const v = +t.value;

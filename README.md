@@ -150,6 +150,7 @@ Proprietà comuni: `id` (univoco, usato come riferimento da `kingdom` e `kingdom
 | `size` | altezza del testo in blocchi, minimo 2 (`null` = calcolata dall'area o dalla lunghezza) |
 | `rotation` | gradi (`null` = automatica: 0, oppure lungo il fiume) |
 | `pos` | `[x, z]` del nome (`null` = punto più interno dell'area; sulle linee lunghe il nome si ripete lungo il tracciato) |
+| `repeat` | solo linee: numero di copie del nome lungo la linea, da 1 a 10 (`null` = automatico, in base alla lunghezza) |
 | `showKingdom` | mostra "(Regno)" sotto il nome di marche e località |
 | `anchor` | solo località: `right`, `left`, `top`, `bottom` |
 

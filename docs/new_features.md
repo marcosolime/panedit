@@ -116,7 +116,10 @@ identici, e ricaricando la pagina i valori restano.
   cambiano.
 - **Posizione e rotazione manuali**: trascinando una qualsiasi copia si fissa `label.pos` e resta solo quella;
   "reimposta" nell'ispettore ripristina le ripetizioni. `label.rotation`, se impostata, vale per tutte le copie.
-- Vale per tutte le linee (oggi fiume, torrente, canale; domani la DMZ). Nessun campo nuovo nel file.
+- **Numero di ripetizioni a mano** (aggiunto dopo): nell'ispettore, sezione Etichetta, il campo *Ripetizioni del
+  nome* (1–10) con la spunta *auto*. Si salva in `label.repeat` (`null` = automatico); un numero fisso toglie
+  l'eventuale posizione manuale, altrimenti resterebbe una sola copia.
+- Vale per tutte le linee (fiumi, torrenti, canali, DMZ e in futuro le linee ferroviarie).
 
 **Fatta quando**: sulla mappa di prova il fiume lungo mostra 2–3 nomi che seguono l'andamento del fiume senza
 storture, il fiume corto uno solo, e trascinare / reimpostare l'etichetta funziona.
