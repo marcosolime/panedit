@@ -71,5 +71,64 @@ const Rail = (() => {
     });
   }
 
-  return { isRing, stops, duplicate, linesAt, lineInfo, stationInfo };
+  // ---- percorso più breve ----
+  // Grafo: nodi = stazioni; archi = segmenti tra fermate consecutive di ogni linea (nell'anello anche il tratto di
+  // chiusura), non orientati, con la loro lunghezza e il tracciato (coords) per evidenziarli sulla mappa.
+  function graph(stations = Store.all('stazione')) {
+    const adj = new Map();
+    const link = (a, b, e, rev) => { if (!adj.has(a)) adj.set(a, []); adj.get(a).push({ to: b, edge: e, rev }); };
+    for (const line of Store.all('linea')) {
+      if (line.geometry?.type !== 'LineString') continue;
+      const c = line.geometry.coordinates, info = lineInfo(line, stations), st = info.stops;
+      const edges = st.slice(1).map((s, k) => ({ a: st[k].station.id, b: s.station.id, line, length: s.at - st[k].at,
+        coords: c.slice(st[k].i, s.i + 1) }));
+      if (info.ring && st.length > 1) edges.push({ a: st.at(-1).station.id, b: st[0].station.id, line,
+        length: info.segments.at(-1).length, coords: [...c.slice(st.at(-1).i), ...c.slice(1, st[0].i + 1)] });
+      edges.forEach(e => { link(e.a, e.b, e, false); link(e.b, e.a, e, true); });
+    }
+    return adj;
+  }
+
+  // Percorso da una stazione all'altra: il più corto in blocchi e, a parità di distanza, quello con meno cambi.
+  // Dijkstra sugli stati (stazione, linea con cui ci si è arrivati), così il cambio di linea è un costo
+  // secondario. Restituisce { length, changes, legs: [{ line, from, to, length, stops, coords }] } o null.
+  // Ogni tratto (leg) è un pezzo percorso senza cambiare linea; stops = fermate dopo quella di partenza.
+  function route(fromId, toId, stations = Store.all('stazione')) {
+    if (!fromId || !toId || fromId === toId) return null;
+    const adj = graph(stations), EPS = 1e-6;
+    const better = (a, b) => a.d < b.d - EPS || (Math.abs(a.d - b.d) <= EPS && a.c < b.c);
+    const start = fromId + '|';
+    const best = new Map([[start, { d: 0, c: 0, st: fromId, line: null }]]), prev = new Map(), done = new Set();
+    let end = null;
+    for (;;) {
+      let key = null;
+      for (const [k, v] of best) if (!done.has(k) && (!key || better(v, best.get(key)))) key = k;
+      if (!key) return null;   // stazioni non collegate
+      const cur = best.get(key);
+      if (cur.st === toId) { end = key; break; }
+      done.add(key);
+      for (const { to, edge, rev } of adj.get(cur.st) || []) {
+        const k2 = to + '|' + edge.line.id;
+        if (done.has(k2)) continue;
+        const next = { d: cur.d + edge.length, c: cur.c + (cur.line && cur.line !== edge.line.id ? 1 : 0), st: to, line: edge.line.id };
+        if (!best.has(k2) || better(next, best.get(k2))) { best.set(k2, next); prev.set(k2, { key, edge, rev }); }
+      }
+    }
+    // a ritroso dall'arrivo, poi i passi consecutivi sulla stessa linea si uniscono in un tratto
+    const steps = [];
+    for (let k = end; prev.has(k); k = prev.get(k).key) {
+      const { key, edge, rev } = prev.get(k);
+      steps.unshift({ from: best.get(key).st, to: best.get(k).st, edge, coords: rev ? edge.coords.slice().reverse() : edge.coords });
+    }
+    const legs = [];
+    for (const s of steps) {
+      const leg = legs.at(-1);
+      if (leg && leg.line === s.edge.line) {
+        leg.to = s.to; leg.length += s.edge.length; leg.stops++; leg.coords.push(...s.coords.slice(1));
+      } else legs.push({ line: s.edge.line, from: s.from, to: s.to, length: s.edge.length, stops: 1, coords: s.coords.slice() });
+    }
+    return { length: best.get(end).d, changes: legs.length - 1, legs };
+  }
+
+  return { isRing, stops, duplicate, linesAt, lineInfo, stationInfo, graph, route };
 })();

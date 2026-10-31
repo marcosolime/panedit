@@ -6,9 +6,9 @@ const Render = (() => {
   const hooks = { hover: () => {}, click: () => {}, vertexDragStart: () => {}, vertexDragEnd: () => {}, edited: () => {}, moved: () => {} };
 
   // Ordine dei livelli (dal basso): continenti, regioni, territori, acque, protettorati, marche, DMZ (fascia e
-  // linea principale), linee ferroviarie, etichette, località e stazioni
+  // linea principale), linee ferroviarie, percorso calcolato, etichette, località e stazioni
   const PANES = { continente: 402, regione: 404, territorio: 406, acqua: 408, protettorato: 410, marca: 412,
-    dmzBand: 414, dmz: 416, linea: 418, sketch: 440, labels: 450, localita: 460 };
+    dmzBand: 414, dmz: 416, linea: 418, route: 419, sketch: 440, labels: 450, localita: 460 };
 
   const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
   const norm = s => (s || '').trim().toLowerCase();
@@ -262,6 +262,20 @@ const Render = (() => {
       const dot = items.get(st.id)?.els[0]?.querySelector('.dot');
       if (dot) dot.classList.toggle('s-interscambio', isInterchange(st));
     }
+  }
+
+  // Percorso calcolato (pannello Ferrovie): per ogni tratto un alone chiaro e sopra il colore della sua linea.
+  // parts: [{ coords, color }], o null per toglierlo. Restituisce i confini del percorso (per inquadrarlo).
+  let routeLayer = null;
+  function showRoute(parts) {
+    if (routeLayer) { routeLayer.remove(); routeLayer = null; }
+    if (!parts || !parts.length) return null;
+    const base = { pane: 'route', lineCap: 'round', lineJoin: 'round', interactive: false, pmIgnore: true, snapIgnore: true };
+    routeLayer = L.featureGroup(parts.flatMap(({ coords, color }) => {
+      const lls = Geo.toLatLngs({ type: 'LineString', coordinates: coords });
+      return [L.polyline(lls, { ...base, color: '#ffffff', weight: 15, opacity: 0.5 }), L.polyline(lls, { ...base, color, weight: 6, opacity: 1 })];
+    })).addTo(map);
+    return routeLayer.getBounds();
   }
 
   // ---- costruzione dei layer ----
@@ -538,6 +552,6 @@ const Render = (() => {
     init, hooks, state, select, setHover, setGroup, setEditing, zoomTo, boundsOf, setHidden, setLocked,
     colorOf, kingdomOf, kingdomsOf, kingdomShape, autoSize, autoRepeat, restyleAll, updateLabels, esc, mix,
     get map() { return map; }, item: id => items.get(id),
-    redraw: id => sync(id)   // ridisegna un'entità dallo Store (es. dopo una modifica rifiutata)
+    redraw: id => sync(id), showRoute   // ridisegna un'entità dallo Store (es. dopo una modifica rifiutata)
   };
 })();

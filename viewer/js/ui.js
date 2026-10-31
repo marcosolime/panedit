@@ -148,6 +148,7 @@ const UI = (() => {
   // k: id di un pannello o un tipo (si apre il pannello che lo contiene)
   function showPanel(k) {
     panel = panelOf(k);
+    if (panel !== 'ferrovia' && route.shown) { route.shown = false; Render.showRoute(null); }
     const P = panelDef(panel);
     const lockable = panel !== 'regno';
     const news = P.kinds.map(x => `<button class="btn-new" data-act="new" data-kind="${x}">${ICONS.plus}<span>${esc(KINDS[x].article)}</span></button>`).join('');
@@ -161,11 +162,51 @@ const UI = (() => {
       </div>
       <p class="ph-desc">${esc(DESCRIPTIONS[panel])}</p>
       ${P.kinds.length > 1 ? `<div class="new-row">${news}</div>` : news}
+      ${panel === 'ferrovia' ? ROUTE_BOX : ''}
       <div class="filter">${ICONS.search}<input type="search" id="phFilter" placeholder="Filtra ${esc(P.label.toLowerCase())}…" value="${esc(filters[panel] || '')}"></div>
       <div class="list" id="phList"></div>`;
     $('#phFilter').addEventListener('input', e => { filters[panel] = e.target.value; renderList(); });
     renderList();
     updateRail();
+  }
+
+  // ---- calcolatore di percorso (pannello Ferrovie) ----
+  const route = { from: '', to: '', shown: false };
+  const ROUTE_BOX = `<div class="route" id="rtBox">
+      <div class="route-sel"><select id="rtFrom" data-route="from"></select>
+        <button class="ib sm" data-act="route-swap" title="Scambia partenza e arrivo">⇅</button></div>
+      <div class="route-sel"><select id="rtTo" data-route="to"></select>
+        <button class="btn" data-act="route-go">Calcola</button></div>
+      <div id="rtOut"></div></div>`;
+
+  // Menu delle stazioni e risultato; si ricalcola a ogni modifica della rete finché il percorso è mostrato
+  function renderRoute() {
+    if (!$('#rtBox')) return;
+    const sts = Store.all('stazione').sort(byName);
+    for (const k of ['from', 'to']) if (route[k] && !Store.get(route[k])) route[k] = '';
+    const opts = (v, ph) => `<option value="">${ph}</option>` +
+      sts.map(s => `<option value="${esc(s.id)}"${s.id === v ? ' selected' : ''}>${esc(s.properties.name || '—')}</option>`).join('');
+    $('#rtFrom').innerHTML = opts(route.from, 'Partenza…');
+    $('#rtTo').innerHTML = opts(route.to, 'Arrivo…');
+    $('#rtOut').innerHTML = route.shown ? routeHtml() : '';
+  }
+
+  // Risultato: totale e cambi, poi un tratto per linea ("Costiera: Porto Vecchio → Bivio Nord") con i cambi in mezzo
+  function routeHtml() {
+    const close = `<button class="ib sm rt-x" data-act="route-clear" title="Togli il percorso">${ICONS.close}</button>`;
+    const msg = (cls, t) => { Render.showRoute(null); return `<div class="rt-msg ${cls}">${t}${close}</div>`; };
+    if (!route.from || !route.to) return msg('muted', 'Scegli la stazione di partenza e quella di arrivo.');
+    if (route.from === route.to) return msg('muted', 'Partenza e arrivo coincidono.');
+    const r = Rail.route(route.from, route.to);
+    if (!r) return msg('warn-msg', 'Nessun percorso: le due stazioni non sono collegate dalla rete.');
+    Render.showRoute(r.legs.map(l => ({ coords: l.coords, color: Render.colorOf(l.line) })));
+    const nm = id => esc(Store.get(id)?.properties.name || '—');
+    const stn = id => `<button class="link" data-goto="${esc(id)}">${nm(id)}</button>`;
+    const legs = r.legs.map((l, i) => (i ? `<li class="chg">cambio a ${stn(l.from)}</li>` : '') +
+      `<li class="leg" style="--c:${Render.colorOf(l.line)}"><div class="leg-h"><button class="link" data-goto="${esc(l.line.id)}">${esc(l.line.properties.name || '—')}</button>
+        <em>${fmtLen(l.length)}</em></div><div class="leg-b">${stn(l.from)} → ${stn(l.to)} · ${l.stops} ${l.stops === 1 ? 'fermata' : 'fermate'}</div></li>`).join('');
+    return `<div class="rt-head"><div class="stats"><div><b>${nf(r.length / 1000, 2)} km</b><span>${nf(Math.round(r.length))} blocchi</span></div>
+      <div><b>${r.changes}</b><span>${r.changes === 1 ? 'cambio' : 'cambi'}</span></div></div>${close}</div><ol class="legs">${legs}</ol>`;
   }
 
   const DESCRIPTIONS = {
@@ -218,6 +259,7 @@ const UI = (() => {
       const html = kindList(k, shown, q) || `<div class="empty">${q ? 'Nessun risultato' : `Nessun${masc ? ' ' : 'a '}${KINDS[k].label.toLowerCase()} — usa il pulsante qui sopra per crearne ${masc ? 'uno' : 'una'}.`}</div>`;
       return (multi ? `<div class="sec-h">${esc(KINDS[k].plural)}</div>` : '') + html;
     }).join('');
+    renderRoute();
   }
 
   // Righe di un tipo: regni; raggruppate per regno (marche, protettorati, località) o per categoria; semplici
@@ -255,6 +297,21 @@ const UI = (() => {
     const el = $('#panel');
     el.addEventListener('click', e => {
       const act = e.target.closest('[data-act]');
+      if (act?.dataset.act.startsWith('route-')) {
+        const a = act.dataset.act;
+        if (a === 'route-swap') [route.from, route.to] = [route.to, route.from];
+        if (a === 'route-clear') { route.shown = false; Render.showRoute(null); }
+        if (a === 'route-go') {
+          route.shown = true;
+          renderRoute();
+          const r = Rail.route(route.from, route.to);
+          const b = r && L.latLngBounds(r.legs.flatMap(l => Geo.toLatLngs({ type: 'LineString', coordinates: l.coords })));
+          if (b) Render.map.flyToBounds(b, { padding: [60, 60], maxZoom: 0, duration: 0.6 });
+        } else renderRoute();
+        return;
+      }
+      const go = e.target.closest('[data-goto]');
+      if (go) { select(go.dataset.goto, { zoom: true }); return; }
       if (act) {
         const a = act.dataset.act;
         const kinds = panelDef(panel).kinds;   // nascondi / blocca valgono per tutti i tipi del pannello
@@ -276,6 +333,7 @@ const UI = (() => {
       if (row) select(row.dataset.id, { zoom: true });
     });
     el.addEventListener('change', e => {
+      if (e.target.dataset.route) { route[e.target.dataset.route] = e.target.value; e.target.blur(); if (route.shown) renderRoute(); return; }
       const id = e.target.dataset.color;
       if (id) Edit.update(id, p => { p.color = e.target.value; }, { label: 'Colore del regno' });
     });

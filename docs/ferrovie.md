@@ -1,7 +1,7 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **fasi 1–3 completate** (il formato del file è stabile dalla fase 2); fasi 4–6 da fare (31/10/2026). Le nuove
+Stato: **fasi 1–4 completate** (il formato del file è stabile dalla fase 2); fasi 5–6 da fare (31/10/2026). Le nuove
 funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
@@ -223,7 +223,19 @@ con l'etichetta *interscambio*), prima di *Geometria*; ogni nome porta all'entit
 **Fatta quando**: per ogni stazione si leggono le distanze verso le fermate adiacenti e i totali delle linee
 coincidono con `Geo.length`.
 
-### Fase 4: calcolatore di percorso
+### Fase 4: calcolatore di percorso ✔
+
+**Fatta** (31/10/2026).
+- [rail.js](../viewer/js/rail.js): `Rail.graph` (nodi = stazioni, archi = segmenti tra fermate consecutive di ogni
+  linea, anello compreso, con lunghezza e tracciato) e `Rail.route(da, a)`: Dijkstra sugli stati *(stazione, linea
+  con cui ci si è arrivati)*, con costo lessicografico (distanza, poi cambi; distanze uguali entro 1e-6 blocchi), così
+  la regola "a parità di distanza, meno cambi" è esatta. Il risultato è diviso in tratti (*legs*), uno per linea,
+  con stazioni di salita e discesa, lunghezza, numero di fermate e tracciato.
+- [ui.js](../viewer/js/ui.js): riquadro nel pannello Ferrovie (Partenza, Arrivo, ⇅, Calcola, ×); il risultato si
+  ricalcola a ogni modifica della rete finché è mostrato; Calcola inquadra il percorso. Si toglie cambiando pannello.
+- [render.js](../viewer/js/render.js): `Render.showRoute` evidenzia i tratti (alone chiaro e colore della linea) nel
+  pane `route`, sopra le linee e sotto le stazioni.
+
 
 - Nuovo modulo `viewer/js/rail.js` con funzioni pure (come `Geo`): fermate di una linea, segmenti con le loro
   lunghezze, costruzione del grafo, Dijkstra, interscambi.

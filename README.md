@@ -68,6 +68,12 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   le linee che ci fermano (e se è un interscambio), con la fermata precedente e la successiva e la distanza lungo il
   binario. Le distanze sono in km con i blocchi tra parentesi (1 blocco = 1 m); clic su un nome per andarci.
 
+  **Calcolatore di percorso**: nel pannello Ferrovie si scelgono **Partenza** e **Arrivo** (⇅ le scambia) e si
+  preme **Calcola**. Il percorso è il più corto in blocchi lungo i binari; a parità di distanza, quello con meno
+  cambi. Sulla mappa i tratti percorsi si evidenziano; nel pannello compaiono il totale (km e blocchi), il numero di
+  cambi e l'itinerario linea per linea ("Costiera: Porto Vecchio → Bivio Nord · 3 fermate", poi "cambio a …").
+  Il risultato si aggiorna da solo se si modifica la rete; × lo toglie.
+
   Modificando la rete:
   - **spostare una stazione** (trascinandola o dalle coordinate) sposta con lei le linee che ci fermano;
     **trascinare un vertice-fermata** di una linea sposta anche la stazione e le altre linee che ci fermano;
