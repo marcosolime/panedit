@@ -1,7 +1,7 @@
 # Nuove funzioni (richieste di Raj)
 
 Piano per quattro modifiche all'editor chieste da Raj.
-Stato: **fasi 0–4 completate**, fase 5 da fare (31/10/2026).
+Stato: **tutte le fasi completate**, in attesa delle prove con Raj (31/10/2026).
 
 > - Protettorato, inclusione di più regni (es. Avalon-Papasan) con mix di colori se 2 regni ne fanno parte
 > - Creazione di linee di confine tipo dmz, vedi Green Line o Blackline (aggiungerei una categoria sotto territori
@@ -222,12 +222,18 @@ regione, continente o specchio d'acqua.
 i regni con *condiviso*, eliminando Papasan torna un protettorato del solo Avalon con la resa di prima, e Ctrl+Z
 annulla ogni passaggio.
 
-### Fase 5: documentazione e rifiniture
+### Fase 5: documentazione e rifiniture ✔
 
-- [README.md](../README.md): tabella del formato (`subtype` e `margin` dei territori, `kingdoms` dei
-  protettorati), nuovo strumento linea per punti nella tabella dei tasti, slider dello sfondo, protettorati
-  condivisi nella sezione "Uso".
-- Taratura finale su mappa reale: passo delle ripetizioni, spessore e colori della DMZ.
+- **Documentazione**: fatta durante le fasi. Il [README.md](../README.md) è stato aggiornato a ogni passo
+  (formato con `subtype` / `margin` dei territori e `kingdoms` dei protettorati, tasto D, slider dello sfondo,
+  DMZ e protettorati condivisi nella sezione "Uso"); [ferrovie.md](ferrovie.md) è stato allineato a ciò che ora
+  esiste (strumento *Linea per punti*, etichette ripetute, punti solo per le località, `Model.fitProps`).
+- **Taratura**: non è codice da scrivere in anticipo. I valori (passo delle ripetizioni `REPEAT_GAP`, ora 3,5;
+  spessore e colori della DMZ; dimensione automatica delle etichette) si ritoccano solo se le prove sulla mappa
+  vera mostrano qualcosa che non va.
+- **Da fare fuori dal codice**: una sessione di prova nel browser con Raj, seguendo i criteri "Fatta quando" di
+  ogni fase. Il codice dalla fase 2 in poi è stato riletto ma non eseguito durante lo sviluppo. Punti più
+  delicati: etichette multiple, fascia della DMZ durante lo zoom, trascinamento dei protettorati condivisi.
 
 **Fatta quando**: Raj prova le quattro funzioni sulla mappa vera senza bisogno di spiegazioni oltre al README.
 

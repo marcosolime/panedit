@@ -1,7 +1,8 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **progettazione conclusa, sviluppo non iniziato** (30/10/2026).
+Stato: **progettazione conclusa, sviluppo non iniziato** (30/10/2026; aggiornato il 31/10/2026 dopo le nuove
+funzioni di [new_features.md](new_features.md), che hanno già preparato alcuni pezzi: vedi sotto).
 
 ## Obiettivo
 
@@ -87,10 +88,18 @@ facoltativo).
 
 - `stazione` e `linea` in `KINDS` e `KIND_ORDER`, icona del treno in [icons.js](../viewer/js/icons.js), pannello
   "Ferrovie". Da valutare: rappresentare la categoria con il meccanismo `subtype` / `subtypes` già esistente
-  (che ispettore e pannelli gestiscono da soli) invece del campo nuovo `category`.
+  (che ispettore e pannelli gestiscono da soli, raggruppando anche le righe del pannello per categoria) invece del
+  campo nuovo `category`. I valori di default e la coerenza con la geometria si aggiungono in `Model.fitProps`,
+  come per le DMZ.
 - **Strumento Stazione**: un clic sulla mappa crea una stazione (si può partire da `createPoint` e dallo
-  strumento Punto).
-- **Strumento Linea**: disegno per punti con aggancio alle stazioni.
+  strumento Punto). Oggi lo strumento Punto (K) crea **solo località** e nessun altro tipo accetta `Point`:
+  `stazione` sarà il secondo tipo puntuale, con uno strumento suo (o K che segue il menu **Crea**). Va tenuto
+  conto anche di `normalize`, che porta a località i punti di un tipo che non ammette `Point`.
+- **Strumento Linea**: disegno per punti con aggancio alle stazioni. **Esiste già una base**: lo strumento
+  *Linea per punti* (D, `polyline` in [tools.js](../viewer/js/tools.js)), con disegno per punti di
+  Leaflet-Geoman, aggancio, Invio per finire (`finishPolygon`), creazione tramite `Edit.createLine(want, g,
+  fallback)` e `targetKind` con ripiego per le linee. Da aggiungere sopra: le regole qui sotto (fermate,
+  chiusura dell'anello, stazioni automatiche ai capolinea).
   - Clic su una stazione: fermata. Clic altrove: curva del binario.
   - Invio o doppio clic: fine della linea.
   - Clic sulla stazione di partenza: chiude la linea circolare e termina il disegno (non è ambiguo, perché una
@@ -208,6 +217,12 @@ Il progetto resta com'è: JavaScript puro senza compilazione, librerie copiate i
 - **Tolleranza.** Le fermate dipendono dalla coincidenza tra vertice e stazione: la tolleranza di `Geo.same`
   (0,05 blocchi) e l'arrotondamento a 0,1 di `Geo.r1` devono restare coerenti in tutte le operazioni.
 - **Fallback di `normalize`.** Una feature senza `kind` riconosciuto diventa località (Point) o acqua
-  (LineString): le stazioni e le linee devono sempre avere il loro `kind` scritto nel file.
-- **Etichette delle linee.** Una LineString oggi riceve l'etichetta a metà lunghezza, ruotata lungo il tratto
-  (`Geo.lineMid`), come i fiumi. Per le linee ferroviarie va deciso se mostrarla di default.
+  (LineString), e lo stesso succede a una feature la cui geometria non è ammessa dal suo `kind`: le stazioni e
+  le linee devono sempre avere il loro `kind` scritto nel file, e `KINDS` deve ammettere le loro geometrie
+  (`Point` per `stazione`, `LineString` per `linea`).
+- **Etichette delle linee.** Ogni LineString riceve il nome **ripetuto lungo il tracciato** in base alla
+  lunghezza (`labelPlacements` in [render.js](../viewer/js/render.js), con `Geo.lineAt` in
+  [geo.js](../viewer/js/geo.js) al posto del vecchio `lineMid`), come fiumi e DMZ. Per le linee ferroviarie va
+  deciso se mostrarlo e se ripeterlo: per escluderle basta un controllo sul `kind` in `labelPlacements`.
+- **Pane e livelli.** Le DMZ hanno pane propri (`dmzBand`, `dmz`) sopra le marche; le ferrovie andranno in un
+  pane loro, probabilmente sopra le DMZ e sotto le etichette (`PANES` in `render.js`).
