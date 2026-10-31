@@ -685,7 +685,8 @@ const UI = (() => {
         h += `<div class="xz">${field('X', `<input type="number" data-c="0" value="${g.coordinates[0]}">`)}${field('Z', `<input type="number" data-c="1" value="${g.coordinates[1]}">`)}</div>
           <p class="muted">Trascina il punto sulla mappa per spostarlo.</p>`;
       }
-      if (g.type !== 'Point') {
+      // niente Semplifica sulle linee ferroviarie: toglierebbe vertici-fermata, staccando le stazioni
+      if (g.type !== 'Point' && p.kind !== 'linea') {
         h += `<div class="simp"><button class="btn" data-act="simplify">${ICONS.simplify}<span>Semplifica</span></button>
           <label class="mini">tolleranza <input type="number" min="0.5" max="50" step="0.5" data-s="simplify" value="${Settings.simplify}"> blocchi</label></div>`;
       }

@@ -358,7 +358,7 @@ const Edit = (() => {
 
   function simplify(id, tol) {
     const f = clone(Store.get(id));
-    if (!f || !f.geometry) return 0;
+    if (!f || !f.geometry || f.properties.kind === 'linea') return 0;   // linee ferroviarie: perderebbero le fermate
     const before = Geo.countVertices(f.geometry);
     f.geometry = Geo.simplify(f.geometry, tol);
     stitchAround(f);

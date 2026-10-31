@@ -184,6 +184,8 @@ In [tools.js](../viewer/js/tools.js):
   vertici e all'aggiunta di vertici: la modifica è rifiutata con un avviso e l'entità ridisegnata com'era
   (`Render.redraw`).
 - Prolungamento: nessun codice (vedi le decisioni).
+- *Semplifica* non è disponibile sulle linee ferroviarie (pulsante nascosto, `Edit.simplify` le ignora): toglierebbe
+  vertici-fermata, staccando le stazioni.
 
 
 - **Spostare una stazione** sposta i vertici coincidenti di tutte le linee che ci fermano, in un solo passo di
