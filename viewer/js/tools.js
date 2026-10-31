@@ -180,17 +180,42 @@ const Edit = (() => {
     Store.open('Assegna regno');
     for (const id of ids) {
       const f = clone(Store.get(id));
-      if (f && f.properties.kingdom !== kid) { f.properties.kingdom = kid; Store.put(f); }
+      if (f && f.properties.kingdom !== kid) { Model.setKingdoms(f.properties, [kid]); Store.put(f); }
     }
     Store.commit();
   }
+
+  // Regni proprietari di un protettorato (anche più d'uno)
+  function editKingdoms(id, fn, label) {
+    const f = clone(Store.get(id));
+    if (!f) return;
+    const before = Model.kingdomIds(f.properties).join();
+    Model.setKingdoms(f.properties, fn(Model.kingdomIds(f.properties).slice()));
+    if (Model.kingdomIds(f.properties).join() === before) return;
+    Store.put(f, { label });
+    Store.commit();
+  }
+  const addKingdom = (id, kid) => editKingdoms(id, ks => [...ks, kid], 'Aggiungi regno');
+  const removeKingdom = (id, kid) => editKingdoms(id, ks => ks.filter(k => k !== kid), 'Togli regno');
+  // Trascinamento nel pannello: sostituisce solo il regno da cui si è presa la riga (to = null: lo toglie)
+  const moveKingdom = (id, from, to) => editKingdoms(id, ks => {
+    const i = from ? ks.indexOf(from) : -1;
+    if (!to) return ks.filter(k => k !== from);
+    if (ks.includes(to)) return ks.filter(k => k !== from);
+    if (i < 0) return [...ks, to];
+    ks[i] = to;
+    return ks;
+  }, 'Assegna regno');
 
   function remove(id) {
     const f = Store.get(id);
     if (!f) return;
     Store.open(`Elimina ${KINDS[f.properties.kind].label.toLowerCase()}`);
     if (f.properties.kind === 'regno') {
-      for (const o of Store.all()) if (o.properties.kingdom === id) { const c = clone(o); c.properties.kingdom = null; Store.put(c); }
+      for (const o of Store.all()) {
+        const ks = Model.kingdomIds(o.properties);
+        if (ks.includes(id)) { const c = clone(o); Model.setKingdoms(c.properties, ks.filter(k => k !== id)); Store.put(c); }
+      }
     }
     Store.remove(id);
     Store.commit();
@@ -230,7 +255,7 @@ const Edit = (() => {
 
   return {
     createArea, createLine, createPoint, createKingdom, addArea, subArea, replaceArea,
-    vertexDragStart, vertexDragEnd, geometryEdited, labelMoved, update, setKingdom, remove, simplify,
+    vertexDragStart, vertexDragEnd, geometryEdited, labelMoved, update, setKingdom, addKingdom, removeKingdom, moveKingdom, remove, simplify,
     explode, targetKind, validKingdom
   };
 })();

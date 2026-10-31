@@ -25,10 +25,10 @@ const Render = (() => {
     return '#' + x.map((v, i) => Math.round(v + (y[i] - v) * t).toString(16).padStart(2, '0')).join('');
   }
 
-  const kingdomOf = f => {
-    const k = f && f.properties.kingdom && Store.get(f.properties.kingdom);
-    return k && k.properties.kind === 'regno' ? k : null;
-  };
+  // Tutti i regni di un'entità (più d'uno solo per i protettorati condivisi); kingdomOf è il primo
+  const kingdomsOf = f => !f ? [] : Model.kingdomIds(f.properties).map(id => Store.get(id))
+    .filter(k => k && k.properties.kind === 'regno');
+  const kingdomOf = f => kingdomsOf(f)[0] || null;
   // DMZ: territorio tracciato come linea; la fascia cuscinetto è larga 2 × margin blocchi
   const isDmz = f => f.properties.kind === 'territorio' && Geo.isLine(f.geometry);
   const DMZ_COLOR = '#4f9a3a';
@@ -47,17 +47,17 @@ const Render = (() => {
       document.body.appendChild(svg);
       defs = svg.firstChild;
     }
-    function hatch(color) {
-      const id = 'pe-h-' + color.replace('#', '');
+    // Tratteggio dei protettorati: una striscia per colore, alternate (protettorati condivisi tra più regni)
+    function hatch(colors) {
+      const id = 'pe-h-' + colors.map(c => c.replace('#', '')).join('-');
       if (!made.has(id)) {
-        const light = mix(color, '#ffffff', 0.35);
         const el = document.createElementNS('http://www.w3.org/2000/svg', 'pattern');
         el.setAttribute('id', id);
         el.setAttribute('patternUnits', 'userSpaceOnUse');
-        el.setAttribute('width', 10); el.setAttribute('height', 10);
+        el.setAttribute('width', 10 * colors.length); el.setAttribute('height', 10);
         el.setAttribute('patternTransform', 'rotate(45)');
-        el.innerHTML = `<rect width="10" height="10" fill="${color}" fill-opacity="0.22"/>` +
-          `<rect width="3.5" height="10" fill="${light}" fill-opacity="0.75"/>`;
+        el.innerHTML = colors.map((c, i) => `<rect x="${10 * i}" width="10" height="10" fill="${c}" fill-opacity="0.22"/>` +
+          `<rect x="${10 * i}" width="3.5" height="10" fill="${mix(c, '#ffffff', 0.35)}" fill-opacity="0.75"/>`).join('');
         defs.appendChild(el);
         made.set(id, true);
       }
@@ -71,7 +71,12 @@ const Render = (() => {
     const p = f.properties, c = colorOf(f), line = Geo.isLine(f.geometry);
     switch (p.kind) {
       case 'marca': return { color: mix(c, '#ffffff', 0.3), weight: 2, opacity: 1, fillColor: c, fillOpacity: 0.36, dashArray: null, lineJoin: 'round' };
-      case 'protettorato': return { color: mix(c, '#ffffff', 0.5), weight: 2.4, opacity: 1, dashArray: '0.1 6', lineCap: 'round', fillColor: Defs.hatch(c), fillOpacity: 1 };
+      case 'protettorato': {
+        // condiviso: strisce nei colori dei regni e bordo neutro
+        const ks = kingdomsOf(f), shared = ks.length > 1;
+        return { color: shared ? '#eeeeee' : mix(c, '#ffffff', 0.5), weight: 2.4, opacity: 1, dashArray: '0.1 6', lineCap: 'round',
+          fillColor: Defs.hatch(shared ? ks.map(k => k.properties.color) : [c]), fillOpacity: 1 };
+      }
       case 'territorio': return !line ? { stroke: false, fillColor: c, fillOpacity: 0.34 }
         // con la fascia la linea principale è sottile e tratteggiata, senza è una linea divisoria piena
         : p.margin > 0 ? { color: mix(c, '#ffffff', 0.55), weight: 1.6, opacity: 0.95, dashArray: '8 6', lineCap: 'butt', fill: false }
@@ -100,7 +105,7 @@ const Render = (() => {
     if (!it || !f || !it.shape || !it.shape.setStyle) return;
     const sel = state.selected;
     const hot = state.hover === id || state.group.has(id) || sel === id ||
-      (!!sel && f.properties.kingdom === sel && KINDS[f.properties.kind].political);
+      (!!sel && KINDS[f.properties.kind].political && Model.kingdomIds(f.properties).includes(sel));
     const s = baseStyle(f);
     it.shape.setStyle(hot ? hoverStyle(f, s) : s);
     const el = it.shape.getElement && it.shape.getElement();
@@ -178,10 +183,10 @@ const Render = (() => {
   }
 
   function labelHtml(f) {
-    const p = f.properties, k = kingdomOf(f);
+    const p = f.properties;
+    const names = kingdomsOf(f).map(k => k.properties.name).filter(n => norm(n) !== norm(p.name));
     let sub = '';
-    if (KINDS[p.kind].hasKingdom && p.label.showKingdom && k && norm(k.properties.name) !== norm(p.name))
-      sub = `<small>(${esc(k.properties.name)})</small>`;
+    if (KINDS[p.kind].hasKingdom && p.label.showKingdom && names.length) sub = `<small>(${names.map(esc).join(' · ')})</small>`;
     const style = p.label.color ? ` style="color:${esc(p.label.color)}"` : '';
     return `<span class="t"${style}>${esc(p.name || '—')}</span>${sub}`;
   }
@@ -501,7 +506,7 @@ const Render = (() => {
 
   return {
     init, hooks, state, select, setHover, setGroup, setEditing, zoomTo, boundsOf, setHidden, setLocked,
-    colorOf, kingdomOf, kingdomShape, autoSize, restyleAll, updateLabels, esc, mix,
+    colorOf, kingdomOf, kingdomsOf, kingdomShape, autoSize, restyleAll, updateLabels, esc, mix,
     get map() { return map; }, item: id => items.get(id)
   };
 })();

@@ -130,6 +130,7 @@ kbd { font: 11px/1 var(--ui); padding: 3px 5px; border-radius: 4px; background: 
 .row.dragging { opacity: .4; }
 .row .nm { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .row .meta { color: var(--faint); font-size: 11px; white-space: nowrap; }
+.row .shared { margin-left: 6px; color: var(--faint); font-size: 11px; font-style: italic; }
 .row .meta.warn { color: var(--warn); }
 .sw { width: 12px; height: 12px; border-radius: 3px; background: var(--c); flex: none; box-shadow: inset 0 0 0 1px rgba(255,255,255,.25); }
 .sw.big { width: 26px; height: 26px; border-radius: 6px; position: relative; cursor: pointer; overflow: hidden; }
@@ -298,12 +299,19 @@ path.pe-soft.pe-selected { filter: none; }
 .fld { display: flex; flex-direction: column; gap: 5px; margin-bottom: 10px; }
 .fl { color: var(--muted); font-size: 12px; display: flex; justify-content: space-between; }
 .fl em { font-style: normal; color: var(--text); }
+.fl em.shared { font-style: italic; color: var(--faint); }
 .fld input[type=text], .fld input[type=number], .ins-body textarea { width: 100%; height: 32px; padding: 0 9px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); outline: none; }
 .fld input[data-p=name] { height: 38px; font: 700 16px/1 var(--map-serif); letter-spacing: .04em; }
 .fld input:focus, .ins-body textarea:focus, .fld select:focus { border-color: var(--accent); }
 .fld select { width: 100%; height: 32px; }
 .ins-body textarea { height: auto; padding: 8px 9px; resize: vertical; }
 .kd-sel select { border-left: 5px solid var(--c); }
+.owners { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+.owner { display: inline-flex; align-items: center; gap: 2px; padding: 2px 2px 2px 9px; border-radius: 12px; background: var(--surface-2); box-shadow: inset 4px 0 0 var(--c); }
+.owner .link { color: var(--text); font-size: 12px; }
+.owner .x { display: inline-flex; border: 0; background: none; color: var(--muted); padding: 2px; border-radius: 50%; cursor: pointer; }
+.owner .x:hover { color: var(--danger); background: var(--surface-3); }
+.owner .x svg { width: 12px; height: 12px; }
 .colors { display: flex; align-items: center; flex-wrap: wrap; gap: 5px; }
 .colors input[type=color] { width: 40px; height: 30px; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-2); cursor: pointer; }
 .chip { width: 18px; height: 18px; border-radius: 4px; border: 0; background: var(--c); box-shadow: inset 0 0 0 1px rgba(255,255,255,.2); }

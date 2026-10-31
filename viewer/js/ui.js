@@ -13,7 +13,9 @@ const UI = (() => {
   };
   const byName = (a, b) => (a.properties.name || '').localeCompare(b.properties.name || '', 'it');
   const kingdoms = () => Store.all('regno').sort(byName);
-  const members = (kid, kind = 'marca') => Store.all(kind).filter(f => f.properties.kingdom === kid);
+  const members = (kid, kind = 'marca') => Store.all(kind).filter(f => Model.kingdomIds(f.properties).includes(kid));
+  // nomi dei regni di un'entità ("Avalon · Papasan" per i protettorati condivisi)
+  const kingdomNames = f => Render.kingdomsOf(f).map(k => k.properties.name).join(' · ');
   const kindName = k => KINDS[k].label.toLowerCase();
 
   // ---------------------------------------------------------------- toast
@@ -94,7 +96,7 @@ const UI = (() => {
     const draw = () => {
       box.innerHTML = hits.map((f, i) => `<div class="res${i === cur ? ' cur' : ''}" data-id="${esc(f.id)}">
         <i style="--c:${Render.colorOf(f)}">${ICONS[f.properties.kind]}</i><b>${esc(f.properties.name || '—')}</b>
-        <span>${esc(KINDS[f.properties.kind].label)}${Render.kingdomOf(f) ? ' · ' + esc(Render.kingdomOf(f).properties.name) : ''}</span></div>`).join('')
+        <span>${esc(KINDS[f.properties.kind].label)}${kingdomNames(f) ? ' · ' + esc(kingdomNames(f)) : ''}</span></div>`).join('')
         || (input.value.trim() ? '<div class="res none">Nessun risultato</div>' : '');
       box.classList.toggle('open', !!input.value.trim() && document.activeElement === input);
     };
@@ -179,8 +181,10 @@ const UI = (() => {
     else if (Geo.isLine(g)) meta = `<span class="meta">${fmtLen(Geo.length(g))}</span>`;
     else if (p.subtype && KINDS[p.kind].subtypes) meta = `<span class="meta">${esc(KINDS[p.kind].subtypes[p.subtype] || p.subtype)}</span>`;
     const drag = KINDS[p.kind].hasKingdom ? ' draggable="true"' : '';
+    // protettorato condiviso: compare sotto ciascuno dei suoi regni
+    const shared = Model.kingdomIds(p).length > 1 ? '<em class="shared">condiviso</em>' : '';
     return `<div class="row${p.id === selected ? ' sel' : ''}" data-id="${esc(p.id)}"${drag}>
-      <i class="sw" style="--c:${sw || Render.colorOf(f)}"></i><span class="nm">${esc(p.name || '—')}</span>${meta}</div>`;
+      <i class="sw" style="--c:${sw || Render.colorOf(f)}"></i><span class="nm">${esc(p.name || '—')}${shared}</span>${meta}</div>`;
   }
 
   function renderList() {
@@ -214,7 +218,7 @@ const UI = (() => {
     } else if (KINDS[k].hasKingdom) {
       const groups = [...kingdoms().map(kf => ({ id: kf.id, name: kf.properties.name, color: kf.properties.color })), { id: '', name: 'Senza regno', color: '#6b7178' }];
       html = groups.map(gr => {
-        const rows = shown.filter(f => (f.properties.kingdom || '') === gr.id);
+        const rows = shown.filter(f => { const ks = Model.kingdomIds(f.properties); return gr.id ? ks.includes(gr.id) : !ks.length; });
         if (!rows.length && (q || k === 'localita' || !gr.id)) return '';
         const isCol = collapsed.has(k + gr.id);
         return `<div class="grp${isCol ? ' col' : ''}" data-kingdom="${esc(gr.id)}">
@@ -283,6 +287,7 @@ const UI = (() => {
       const row = e.target.closest('.row[data-id]');
       if (!row) return;
       e.dataTransfer.setData('text/plain', row.dataset.id);
+      dragFrom = row.closest('.grp[data-kingdom]')?.dataset.kingdom || null;   // regno da cui si prende la riga
       e.dataTransfer.effectAllowed = 'move';
       row.classList.add('dragging');
     });
@@ -300,12 +305,19 @@ const UI = (() => {
       clearDrop();
       const id = e.dataTransfer.getData('text/plain'), kid = grp.dataset.kingdom || null;
       const f = Store.get(id);
-      if (f && (f.properties.kingdom || null) !== kid) {
+      if (f && f.properties.kind === 'protettorato') {
+        // sostituisce solo il regno di partenza; gli altri proprietari restano
+        if (dragFrom === kid) return;
+        Edit.moveKingdom(id, dragFrom, kid);
+        const after = Store.get(id);
+        toast(`«${f.properties.name}» ${kingdomNames(after) ? 'ora di ' + kingdomNames(after) : 'ora senza regno'}`, 'ok');
+      } else if (f && (f.properties.kingdom || null) !== kid) {
         Edit.setKingdom([id], kid);
         toast(`«${f.properties.name}» ${kid ? 'assegnata a ' + Store.get(kid).properties.name : 'ora senza regno'}`, 'ok');
       }
     });
     const clearDrop = () => el.querySelectorAll('.grp.drop').forEach(g => g.classList.remove('drop'));
+    let dragFrom = null;
   }
 
   // ---------------------------------------------------------------- creazione
@@ -489,7 +501,7 @@ const UI = (() => {
     const k = Render.kingdomOf(f);
     const lab = p.label;
     let h = `<div class="ins-head" style="--c:${color}">
-        <div class="ins-kind">${ICONS[p.kind]}<span>${esc(K.label)}${k ? ' · ' + esc(k.properties.name) : ''}</span></div>
+        <div class="ins-kind">${ICONS[p.kind]}<span>${esc(K.label)}${k ? ' · ' + esc(kingdomNames(f)) : ''}</span></div>
         <div class="ins-acts">
           <button class="ib" data-act="zoom" title="Centra sulla mappa (Z)">${ICONS.target}</button>
           <button class="ib danger" data-act="delete" title="Elimina (Canc)">${ICONS.trash}</button>
@@ -505,7 +517,16 @@ const UI = (() => {
       const ok = KIND_ORDER.filter(x => KINDS[x].geom.includes(g.type));
       if (ok.length > 1) h += field('Tipo', `<select data-p="kind">${ok.map(x => `<option value="${x}"${x === p.kind ? ' selected' : ''}>${esc(KINDS[x].label)}</option>`).join('')}</select>`);
     }
-    if (K.hasKingdom) {
+    if (p.kind === 'protettorato') {
+      // più regni proprietari: chip con × per toglierli, menu per aggiungerne
+      const own = Render.kingdomsOf(f), others = kingdoms().filter(x => !own.includes(x));
+      h += `<div class="fld"><span class="fl">Regni proprietari${own.length > 1 ? ' <em class="shared">condiviso</em>' : ''}</span><div class="owners">
+        ${own.map(x => `<span class="owner" style="--c:${x.properties.color}"><button class="link" data-goto="${esc(x.id)}">${esc(x.properties.name)}</button>
+          <button class="x" data-act="owner-remove" data-kid="${esc(x.id)}" title="Togli ${esc(x.properties.name)}">${ICONS.close}</button></span>`).join('')
+          || '<span class="muted">nessun regno</span>'}</div>
+        <select data-owner="add"><option value="">+ Aggiungi regno…</option>
+        ${others.map(x => `<option value="${esc(x.id)}">${esc(x.properties.name)}</option>`).join('')}<option value="__new">+ Nuovo regno…</option></select></div>`;
+    } else if (K.hasKingdom) {
       h += field('Regno', `<div class="kd-sel" style="--c:${k ? k.properties.color : 'transparent'}"><select data-p="kingdom">
         <option value="">— nessuno —</option>${kingdoms().map(x => `<option value="${esc(x.id)}"${x.id === p.kingdom ? ' selected' : ''}>${esc(x.properties.name)}</option>`).join('')}
         <option value="__new">+ Nuovo regno…</option></select></div>`);
@@ -639,6 +660,14 @@ const UI = (() => {
           else p[prop] = v;
         }, { label: { name: 'Rinomina', kind: 'Cambia tipo', kingdom: 'Assegna regno', color: 'Colore', subtype: 'Categoria', notes: 'Note' }[prop] });
         if (prop === 'kind') showPanel(v);
+      } else if (t.dataset.owner) {
+        const v = t.value;
+        if (v === '__new') {
+          const kid = Edit.createKingdom();
+          Edit.addKingdom(id, kid);
+          select(kid, { focus: true });
+          toast('Regno creato: dagli un nome e un colore');
+        } else if (v) Edit.addKingdom(id, v);
       } else if (t.dataset.m) {
         // a fine digitazione: margine intero e non negativo
         const m = Math.max(0, Math.round(+t.value || 0));
@@ -753,6 +782,7 @@ const UI = (() => {
         case 'delete': removeSelected(); break;
         case 'color-auto': Edit.update(id, p => { p.color = null; }, { label: 'Colore' }); break;
         case 'label-reset': Edit.update(id, p => { p.label.pos = null; }, { label: 'Reimposta etichetta' }); break;
+        case 'owner-remove': Edit.removeKingdom(id, b.dataset.kid); break;
         case 'add': case 'sub': case 'redraw': Tools.set(b.dataset.act); break;
         case 'simplify': {
           const n = Edit.simplify(id, Settings.simplify);
@@ -792,10 +822,10 @@ const UI = (() => {
         if (!id) { chip.classList.remove('on'); return; }
         const f = Store.get(id);
         if (!f) return;
-        const p = f.properties, k = Render.kingdomOf(f), g = f.geometry;
+        const p = f.properties, k = kingdomNames(f), g = f.geometry;
         const extra = Geo.isPoly(g) ? fmtArea(Geo.area(g)) : Geo.isLine(g) ? fmtLen(Geo.length(g)) : (p.subtype && KINDS[p.kind].subtypes?.[p.subtype]) || '';
         chip.innerHTML = `<i class="sw" style="--c:${Render.colorOf(f)}"></i><b>${esc(p.name || '—')}</b>
-          <span>${esc(KINDS[p.kind].label)}${k ? ' di ' + esc(k.properties.name) : ''}${extra ? ' · ' + esc(extra) : ''}</span>`;
+          <span>${esc(KINDS[p.kind].label)}${k ? ' di ' + esc(k) : ''}${extra ? ' · ' + esc(extra) : ''}</span>`;
         chip.classList.add('on');
       }
       if (ev && hoverId) {

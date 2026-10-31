@@ -1,7 +1,7 @@
 # Nuove funzioni (richieste di Raj)
 
 Piano per quattro modifiche all'editor chieste da Raj.
-Stato: **fasi 0–3 completate**, fasi 4–5 da fare (31/10/2026).
+Stato: **fasi 0–4 completate**, fase 5 da fare (31/10/2026).
 
 > - Protettorato, inclusione di più regni (es. Avalon-Papasan) con mix di colori se 2 regni ne fanno parte
 > - Creazione di linee di confine tipo dmz, vedi Green Line o Blackline (aggiungerei una categoria sotto territori
@@ -191,32 +191,35 @@ regione, continente o specchio d'acqua.
   alla geometria; i punti diventano località di categoria `luogo`, con nome ed etichetta conservati.
   Nelle mappe attuali non ce ne sono.
 
-### Fase 4: protettorato condiviso
+### Fase 4: protettorato condiviso ✔
 
-- **Modello**: campo `kingdoms`, con `kingdom = kingdoms[0]` aggiornato a ogni modifica. Punti in cui oggi si
-  legge `kingdom`, da controllare tutti:
-  - raggruppamento e trascinamento delle righe nei pannelli ([ui.js](../viewer/js/ui.js));
-  - eliminazione di un regno: toglie l'id da `kingdoms` invece di azzerare il campo ([tools.js](../viewer/js/tools.js));
-  - validazione dei riferimenti in `Store.load` ([model.js](../viewer/js/model.js)): via gli id che non esistono,
-    via i doppioni;
-  - evidenziazione delle entità del regno selezionato (`restyle` in [render.js](../viewer/js/render.js));
-  - sottotitolo "(Regno)" nelle etichette (`labelHtml`): diventa "(Avalon · Papasan)".
-- **Righe alternate**: `Defs.hatch(color)` diventa `Defs.hatch(colors[])`: un pattern largo `N × striscia`,
-  ruotato di 45°, con una striscia per regno nell'ordine di `kingdoms`. L'id del pattern si costruisce dai
-  colori, così cambiando il colore di un regno il pattern si rigenera da solo. Con un regno solo la resa resta
-  identica a oggi. Il bordo puntinato usa un colore neutro quando i regni sono più di uno.
-- **Pannello Protettorati**: il protettorato compare sotto **ogni** regno proprietario; se è condiviso, accanto
-  al nome la scritta *condiviso* in corsivo grigio. Hover e selezione di una delle copie evidenziano la stessa
-  entità. Trascinare una copia su un altro regno sostituisce solo il regno da cui la si è presa (se il regno di
-  arrivo è già proprietario, la copia si toglie e basta).
-- **Ispettore**: al posto del menu "Regno", l'elenco dei **regni proprietari** come chip con il colore del regno
-  e una × per toglierlo, più un menu "Aggiungi regno" con i regni non ancora presenti. Ogni aggiunta o
-  rimozione è un passo annullabile.
-- **Comportamento**: selezionando un regno si evidenziano anche i protettorati condivisi. L'estensione del regno
-  resta calcolata solo dalle marche.
+- **Modello** ([model.js](../viewer/js/model.js)): i protettorati hanno `kingdoms: [id, …]` (i regni proprietari,
+  nell'ordine delle strisce) e `kingdom`, sempre uguale a `kingdoms[0]`, così il resto del codice e i file attuali
+  continuano a funzionare. Due funzioni condivise, `Model.kingdomIds(p)` e `Model.setKingdoms(p, ids)`, leggono e
+  scrivono i regni tenendo allineati i due campi (senza doppioni); `fitProps` le applica alla creazione,
+  all'apertura e al cambio di tipo (un protettorato che diventa marca tiene solo il primo regno). I file senza
+  `kingdoms` si leggono come `[kingdom]`; `Store.load` toglie gli id di regni inesistenti.
+- **Operazioni** ([tools.js](../viewer/js/tools.js)): `addKingdom`, `removeKingdom`, `moveKingdom` (ognuna un passo
+  di annullamento). Eliminando un regno lo si toglie solo dalla lista: un protettorato Avalon-Papasan resta di
+  Avalon.
+- **Righe alternate** ([render.js](../viewer/js/render.js)): `Defs.hatch(colors[])` crea un pattern largo
+  `10 × N`, ruotato di 45°, con una striscia per regno; l'id del pattern dipende dai colori, quindi cambiando il
+  colore di un regno si rigenera da solo. Con un solo regno la resa è identica a prima. Il bordo puntinato dei
+  condivisi è neutro (grigio chiaro).
+- **Etichetta**: "(Avalon · Papasan)". Anche ricerca, intestazione dell'ispettore e riquadro al passaggio del
+  mouse mostrano tutti i regni.
+- **Pannello Protettorati** ([ui.js](../viewer/js/ui.js)): il protettorato compare sotto **ogni** regno
+  proprietario, con *condiviso* in corsivo grigio accanto al nome. Trascinare una copia su un altro regno
+  sostituisce solo il regno da cui la si è presa (se il regno d'arrivo è già proprietario la copia sparisce;
+  su "Senza regno" quel regno viene tolto).
+- **Ispettore**: al posto del menu "Regno", i **regni proprietari** come chip nel colore del regno (clic sul nome:
+  va al regno; ×: lo toglie) e il menu **+ Aggiungi regno…** (con *+ Nuovo regno…*).
+- **Comportamento**: selezionando un regno, o passando sul suo gruppo nel pannello, si evidenziano anche i
+  protettorati condivisi; l'elenco "Domini" del regno li comprende. L'estensione del regno resta calcolata solo
+  dalle marche.
 
 **Fatta quando**: un protettorato Avalon-Papasan mostra righe blu e del colore di Papasan, compare sotto entrambi
-i regni con *condiviso*, eliminando Papasan torna un protettorato del solo Avalon con la resa di oggi, e Ctrl+Z
+i regni con *condiviso*, eliminando Papasan torna un protettorato del solo Avalon con la resa di prima, e Ctrl+Z
 annulla ogni passaggio.
 
 ### Fase 5: documentazione e rifiniture

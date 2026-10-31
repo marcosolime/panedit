@@ -4,6 +4,7 @@
 //   id, kind ('regno' | 'marca' | 'protettorato' | 'territorio' | 'regione' | 'continente' | 'acqua' | 'localita'),
 //   name, kingdom (id del regno, per marche/protettorati/località), subtype, color, notes,
 //   margin (solo territori DMZ: blocchi per lato dalla linea principale),
+//   kingdoms (solo protettorati: tutti i regni proprietari, nell'ordine delle strisce; kingdom = kingdoms[0]),
 //   label: { show, size (blocchi, null = automatica), rotation (gradi, null = automatica), pos ([x, z], null = automatica),
 //            showKingdom, anchor (solo località) }
 // I regni sono Feature con geometry null: la loro estensione è l'unione delle loro marche.
@@ -85,6 +86,21 @@ const Model = (() => {
     else if (!S[p.subtype]) p.subtype = p.kind === 'acqua' ? (line ? 'fiume' : 'lago') : p.kind === 'localita' ? 'citta' : Object.keys(S)[0];
     if (p.subtype === 'dmz') p.margin = Math.max(0, +p.margin || 0);
     else delete p.margin;
+    setKingdoms(p, kingdomIds(p));
+    return p;
+  }
+
+  // Regni di un'entità: per i protettorati possono essere più d'uno (kingdoms), per gli altri al più uno (kingdom)
+  function kingdomIds(p) {
+    if (p.kind === 'protettorato' && Array.isArray(p.kingdoms)) return p.kingdoms;
+    return p.kingdom ? [p.kingdom] : [];
+  }
+  // Scrive i regni tenendo allineati kingdoms e kingdom (= il primo)
+  function setKingdoms(p, ids) {
+    ids = [...new Set(ids.filter(Boolean))];
+    if (p.kind === 'protettorato') p.kingdoms = ids;
+    else { delete p.kingdoms; ids = ids.slice(0, 1); }
+    p.kingdom = ids[0] || null;
     return p;
   }
 
@@ -135,7 +151,7 @@ const Model = (() => {
     };
   }
 
-  return { clone, make, fitProps, normalize, toFeatureCollection, nextColor, newId };
+  return { clone, make, fitProps, kingdomIds, setKingdoms, normalize, toFeatureCollection, nextColor, newId };
 })();
 
 // Store: tutte le entità, raggruppamento delle modifiche in transazioni, annulla/ripeti.
@@ -248,8 +264,8 @@ const Store = (() => {
     }
     // riferimenti a regni inesistenti
     for (const f of features.values()) {
-      const k = f.properties.kingdom;
-      if (k && features.get(k)?.properties.kind !== 'regno') f.properties.kingdom = null;
+      const p = f.properties;
+      Model.setKingdoms(p, Model.kingdomIds(p).filter(k => features.get(k)?.properties.kind === 'regno'));
     }
     setDirty(false);
     emit('reset');

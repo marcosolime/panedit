@@ -39,6 +39,10 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   sulla mappa. Passando sopra una riga l'entità si evidenzia sulla mappa; clic per selezionarla e centrarla.
 - **Marche e regni**: nel pannello Marche le marche sono raggruppate per regno; trascina una riga su un altro
   regno per riassegnarla. Il colore di una marca è quello del suo regno.
+- **Protettorati condivisi**: un protettorato può appartenere a più regni (nell'ispettore: chip dei regni
+  proprietari, × per toglierne uno, *+ Aggiungi regno…*). Sulla mappa ha righe alternate nei colori dei regni ed
+  etichetta "(Avalon · Papasan)"; nel pannello compare sotto ogni suo regno con la scritta *condiviso*.
+  Trascinandone una copia su un altro regno si sostituisce solo il regno da cui la si è presa.
 - **Hover e selezione**: passando sulla mappa le entità si mettono in rilievo; clic per selezionarle.
   Compaiono i vertici del confine: trascinali per modificarlo, clic su un lato per aggiungere un vertice,
   tasto destro su un vertice per toglierlo. L'etichetta selezionata si può trascinare.
@@ -127,7 +131,7 @@ gioco **[x, z] in blocchi** (z cresce verso sud), non latitudine/longitudine.
 |---|---|---|
 | `regno` | `null` (l'estensione è l'unione delle sue marche) | `color` |
 | `marca` | Polygon / MultiPolygon | `kingdom` |
-| `protettorato` | Polygon / MultiPolygon | `kingdom` |
+| `protettorato` | Polygon / MultiPolygon | `kingdoms` (uno o più regni) · `kingdom` (= il primo di `kingdoms`) |
 | `territorio` | Polygon / MultiPolygon / LineString | `color` (facoltativo) · `subtype`: `area`, oppure `dmz` per le linee · `margin` (solo DMZ) |
 | `regione` | Polygon / MultiPolygon | `color` (facoltativo) |
 | `continente` | Polygon / MultiPolygon | `color` (facoltativo) |
@@ -137,7 +141,7 @@ gioco **[x, z] in blocchi** (z cresce verso sud), non latitudine/longitudine.
 Un territorio LineString è una DMZ: `margin` è la distanza in blocchi della fascia cuscinetto da ciascun lato
 della linea (`0` = solo la linea). La categoria `area` / `dmz` si ricava dalla geometria.
 
-Proprietà comuni: `id` (univoco, usato come riferimento da `kingdom`), `name`, `notes`, `color`
+Proprietà comuni: `id` (univoco, usato come riferimento da `kingdom` e `kingdoms`), `name`, `notes`, `color`
 (`null` = automatico) e `label`:
 
 | Campo di `label` | Significato |
