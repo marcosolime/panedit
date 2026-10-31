@@ -83,7 +83,7 @@ const Basemap = (() => {
 
     const [hx, hz, hzoom] = location.hash.slice(1).split(',').map(Number);
     if ([hx, hz, hzoom].every(Number.isFinite)) map.setView(Geo.ll([hx, hz]), hzoom);
-    else map.setView(Geo.ll([P.centerX, P.centerZ]), -3);
+    else map.setView(Geo.ll([P.centerX, P.centerZ]), 0);   // apertura: zoom 0 al centro (ricaricando resta la vista dell'indirizzo)
 
     map.on('moveend', () => {
       const c = map.getCenter();

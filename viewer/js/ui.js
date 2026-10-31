@@ -210,37 +210,102 @@ const UI = (() => {
       <div><b>${r.changes}</b><span>${r.changes === 1 ? 'cambio' : 'cambi'}</span></div></div>${close}</div><ol class="legs">${legs}</ol>`;
   }
 
-  // ---- schema della rete: anteprima a tutto schermo, esportazione SVG e PDF (stampa del browser, A3) ----
+  // ---- schema della rete: vista a tutto schermo, ritocco manuale, esportazione SVG e PDF (stampa del browser, A3) ----
+  // Le stazioni si trascinano sullo schema (aggancio alla griglia e a 0°/45°/90° con le stazioni collegate); la
+  // posizione si salva nella stazione (properties.schema) e la disposizione automatica la rispetta.
+  const sv = { net: null, drag: null };
+  const schemaOpen = () => document.body.classList.contains('schema-open');
+  function drawSchema(opts = {}) { $('#svBody').innerHTML = Schema.render(sv.net, { edit: true, ...opts }).svg; }
+  // ricalcola la disposizione (dopo uno spostamento salvato, un annullamento, una modifica della rete)
+  function refreshSchema() {
+    sv.net = Schema.prepare();
+    if (!sv.net) { closeSchema(); toast('Lo schema richiede almeno una linea con due fermate', 'warn'); return; }
+    drawSchema();
+  }
   function openSchema() {
-    const svg = Schema.build();
-    if (!svg) { toast('Lo schema richiede almeno una linea con due fermate', 'warn'); return; }
+    if (!Schema.prepare()) { toast('Lo schema richiede almeno una linea con due fermate', 'warn'); return; }
     let view = $('#schemaView');
     if (!view) {
       view = document.createElement('div');
       view.id = 'schemaView';
-      view.innerHTML = `<div class="sv-bar"><b>Schema della rete</b><span class="muted">linee a 0°, 45° e 90° · disposizione automatica</span>
+      view.innerHTML = `<div class="sv-bar"><b>Schema della rete</b>
+        <span class="muted">trascina una stazione per fissarla (anello tratteggiato) · doppio clic su una stazione fissata: torna automatica</span>
         <span class="grow"></span>
+        <button class="btn" data-sv="fix" title="Fissa tutte le stazioni dove sono ora: lo schema resta stabile">Fissa tutte</button>
+        <button class="btn" data-sv="auto" title="Cancella tutte le posizioni fissate">Disposizione automatica</button>
         <button class="btn" data-sv="svg">${ICONS.saveas}<span>Esporta SVG</span></button>
         <button class="btn" data-sv="pdf">${ICONS.file}<span>Esporta PDF</span></button>
         <button class="ib" data-sv="close" title="Chiudi (Esc)">${ICONS.close}</button></div><div class="sv-body" id="svBody"></div>`;
       document.body.appendChild(view);
-      view.addEventListener('click', e => {
-        const a = e.target.closest('[data-sv]')?.dataset.sv;
-        if (a === 'close') closeSchema();
-        else if (a === 'svg') {
-          const d = new Date(), pad = n => String(n).padStart(2, '0');
-          download(`panera_ferrovie_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.svg`, $('#svBody').innerHTML, 'image/svg+xml');
-        } else if (a === 'pdf') window.print();   // "Salva come PDF" nella finestra di stampa; formato A3 orizzontale
-      });
+      bindSchema(view);
     }
-    $('#svBody').innerHTML = svg;
     view.hidden = false;
     document.body.classList.add('schema-open');
+    refreshSchema();
   }
   function closeSchema() {
     const view = $('#schemaView');
     if (view) view.hidden = true;
     document.body.classList.remove('schema-open');
+    sv.net = sv.drag = null;
+  }
+  function bindSchema(view) {
+    view.addEventListener('click', e => {
+      const a = e.target.closest('[data-sv]')?.dataset.sv;
+      if (a === 'close') closeSchema();
+      else if (a === 'fix') Edit.setSchema(Object.fromEntries(sv.net.nodes.map(n => [n.id, [n.x, n.y]])), 'Fissa lo schema');
+      else if (a === 'auto') Edit.setSchema(Object.fromEntries(sv.net.nodes.map(n => [n.id, null])), 'Schema automatico');
+      else if (a === 'svg') {
+        const d = new Date(), pad = n => String(n).padStart(2, '0');
+        download(`panera_ferrovie_${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}.svg`, Schema.render(sv.net).svg, 'image/svg+xml');
+      } else if (a === 'pdf') {
+        // "Salva come PDF" nella finestra di stampa (A3 orizzontale), senza i segni della modifica
+        drawSchema({ edit: false });
+        window.print();
+        drawSchema();
+      }
+    });
+    // trascinamento di una stazione: si ridisegna a ogni cella, con il riquadro fermo; al rilascio si salva
+    const body = $('#svBody');
+    const gridAt = e => {
+      const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(body.querySelector('svg').getScreenCTM().inverse());
+      return [p.x / Schema.GRID, p.y / Schema.GRID];
+    };
+    // doppio clic su una stazione fissata = torna automatica. Lo si riconosce qui (due pressioni sulla stessa stazione
+    // entro 400 ms): l'evento dblclick del browser non è affidabile, perché il primo clic può ridisegnare lo schema.
+    let lastDown = null;
+    body.addEventListener('pointerdown', e => {
+      const id = e.target.closest('[data-id]')?.dataset.id, n = id && sv.net.nodes.find(x => x.id === id);
+      if (!n || e.button !== 0) return;
+      e.preventDefault();
+      if (lastDown && lastDown.id === id && e.timeStamp - lastDown.t < 400) {
+        lastDown = null;
+        if (Store.get(id)?.properties.schema) Edit.setSchema({ [id]: null }, 'Stazione automatica nello schema');
+        return;
+      }
+      lastDown = { id, t: e.timeStamp };
+      sv.drag = { n, from: [n.x, n.y], box: Schema.render(sv.net).box, moved: false, pointer: e.pointerId };
+    });
+    body.addEventListener('pointermove', e => {
+      const dr = sv.drag;
+      if (!dr) return;
+      const pos = Schema.snap(sv.net, dr.n, ...gridAt(e));
+      if (!pos || (pos[0] === dr.n.x && pos[1] === dr.n.y)) return;
+      // il puntatore si cattura solo quando il trascinamento comincia davvero
+      if (!dr.moved) { dr.moved = true; lastDown = null; body.setPointerCapture(dr.pointer); }
+      dr.n.x = pos[0]; dr.n.y = pos[1];
+      dr.n.px = pos[0] * Schema.GRID; dr.n.py = pos[1] * Schema.GRID;
+      drawSchema({ box: dr.box });
+    });
+    const drop = () => {
+      const dr = sv.drag;
+      sv.drag = null;
+      if (!dr || !dr.moved) return;   // semplice clic: nulla da salvare né da ridisegnare
+      if (dr.n.x === dr.from[0] && dr.n.y === dr.from[1]) { drawSchema(); return; }
+      Edit.setSchema({ [dr.n.id]: [dr.n.x, dr.n.y] }, 'Sposta nello schema');
+    };
+    body.addEventListener('pointerup', drop);
+    body.addEventListener('pointercancel', drop);
   }
   function download(name, text, type) {
     const a = document.createElement('a');
@@ -561,8 +626,9 @@ const UI = (() => {
     $('#tglRight').addEventListener('click', () => setSide('right', !Settings.rightOpen));
     // stato iniziale senza animazione
     $('#app').classList.add('no-anim');
-    setSide('left', Settings.leftOpen);
-    setSide('right', Settings.rightOpen);
+    // all'apertura i pannelli sono chiusi, per lasciare tutto lo spazio alla mappa
+    setSide('left', false);
+    setSide('right', false);
     requestAnimationFrame(() => requestAnimationFrame(() => $('#app').classList.remove('no-anim')));
     // la mappa segue lo scorrimento dei pannelli
     new ResizeObserver(() => map.invalidateSize({ animate: false })).observe($('#map'));
@@ -1092,7 +1158,7 @@ const UI = (() => {
       if (mod && key === 'y') { e.preventDefault(); command('redo'); return; }
       if (mod && key === 'o') { e.preventDefault(); command('open'); return; }
       if (mod || e.altKey) return;
-      if (e.key === 'Escape' && document.body.classList.contains('schema-open')) { closeSchema(); return; }
+      if (e.key === 'Escape' && schemaOpen()) { closeSchema(); return; }
       if (e.key === 'Escape') { closeMenu(); if (!Tools.escape()) select(null); return; }
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeSelected(); return; }
       if (e.key === 'Enter') { Tools.finishPolygon(); return; }
@@ -1137,6 +1203,7 @@ const UI = (() => {
     renderInspector();
 
     Store.on('change', () => {
+      if (schemaOpen()) refreshSchema();   // posizioni nello schema salvate, annullate o rete modificata
       queueList();
       if (!quiet) renderInspector();
       renderToolstrip();

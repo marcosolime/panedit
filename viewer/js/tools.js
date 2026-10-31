@@ -356,6 +356,18 @@ const Edit = (() => {
     Store.commit();
   }
 
+  // Posizioni nello schema della rete (vista Schema): pos = { id stazione: [x, y] in unità di griglia | null = automatica }
+  function setSchema(pos, label) {
+    Store.open(label);
+    for (const [id, v] of Object.entries(pos)) {
+      const f = clone(Store.get(id));
+      if (!f || JSON.stringify(f.properties.schema ?? null) === JSON.stringify(v)) continue;
+      if (v) f.properties.schema = v; else delete f.properties.schema;
+      Store.put(f);
+    }
+    Store.commit();
+  }
+
   function simplify(id, tol) {
     const f = clone(Store.get(id));
     if (!f || !f.geometry || f.properties.kind === 'linea') return 0;   // linee ferroviarie: perderebbero le fermate
@@ -391,7 +403,7 @@ const Edit = (() => {
   return {
     createArea, createLine, createRailLine, createPoint, movePoint, createKingdom, addArea, subArea, replaceArea,
     vertexDragStart, vertexDragEnd, geometryEdited, labelMoved, update, setKingdom, addKingdom, removeKingdom, moveKingdom, remove, simplify,
-    explode, targetKind, validKingdom
+    explode, targetKind, validKingdom, setSchema
   };
 })();
 

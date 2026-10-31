@@ -1,5 +1,6 @@
-// Schema "metropolitana" della rete ferroviaria (docs/ferrovie.md, fase 5): disposizione ottilineare delle stazioni
-// (tratti a 0°, 45°, 90°) e disegno in SVG, con legenda. Euristica pensata per alcune decine di stazioni.
+// Schema "metropolitana" della rete ferroviaria (docs/ferrovie.md, fasi 5 e 6): disposizione ottilineare delle
+// stazioni (tratti a 0°, 45°, 90°) e disegno in SVG, con legenda. Euristica pensata per alcune decine di stazioni.
+// Le stazioni sistemate a mano nella vista Schema hanno properties.schema = [x, y] (unità di griglia) e restano ferme.
 const Schema = (() => {
   const GRID = 14;            // pixel per unità di griglia
   const UNIT = 5;             // unità di griglia per la lunghezza mediana di un tratto
@@ -21,7 +22,8 @@ const Schema = (() => {
       lines.push({ line, seq, ring: info.ring, color: Render.colorOf(line), direct: line.properties.subtype === 'direttissima', uses: [] });
     }
     const nodes = stations.filter(s => used.has(s.id)).map(s => ({
-      id: s.id, name: s.properties.name || '—', ox: s.geometry.coordinates[0], oy: s.geometry.coordinates[1], lines: new Set()
+      id: s.id, name: s.properties.name || '—', ox: s.geometry.coordinates[0], oy: s.geometry.coordinates[1], lines: new Set(),
+      fixed: Array.isArray(s.properties.schema) ? s.properties.schema : null
     }));
     const byId = new Map(nodes.map(n => [n.id, n]));
     // un tratto per coppia di stazioni; più linee (o passaggi) sullo stesso tratto si disegnano affiancate
@@ -45,34 +47,47 @@ const Schema = (() => {
   // 3. giri di aggiustamento: le due stazioni di ogni tratto si avvicinano alla direzione voluta; le stazioni troppo
   //    vicine si respingono
   // 4. allineamento alla griglia; due stazioni nella stessa cella: la seconda va nella cella libera più vicina
+  // Le stazioni fissate (n.fixed) non si muovono: le altre partono allineate a loro e si dispongono attorno.
   function layout({ nodes, edges }) {
     const d = (a, b) => Math.hypot(b.ox - a.ox, b.oy - a.oy);
     const lens = edges.map(e => d(e.a, e.b)).filter(x => x > 0).sort((x, y) => x - y);
     const med = lens[Math.floor(lens.length / 2)] || 1;
-    const cx = nodes.reduce((s, n) => s + n.ox, 0) / nodes.length, cy = nodes.reduce((s, n) => s + n.oy, 0) / nodes.length;
-    nodes.forEach(n => { n.x = (n.ox - cx) / med * UNIT; n.y = (n.oy - cy) / med * UNIT; });
-    edges.forEach(e => { e.dir = Math.round(Math.atan2(e.b.y - e.a.y, e.b.x - e.a.x) / (Math.PI / 4)); });
+    const mean = (ns, f) => ns.reduce((s, n) => s + f(n), 0) / ns.length;
+    nodes.forEach(n => { n.x = n.ox / med * UNIT; n.y = n.oy / med * UNIT; });
+    // le stazioni libere partono sempre dalle coordinate reali centrate (le posizioni fissate sono salvate nello stesso
+    // riferimento): spostarne una non trascina le altre, sono gli aggiustamenti a collegarle a quelle fissate vicine
+    const tx = -mean(nodes, n => n.x), ty = -mean(nodes, n => n.y);
+    nodes.forEach(n => { n.x += tx; n.y += ty; });
+    const fixed = nodes.filter(n => n.fixed);
+    fixed.forEach(n => { n.x = n.fixed[0]; n.y = n.fixed[1]; });
+    edges.forEach(e => { e.dir = Math.round(Math.atan2(e.b.oy - e.a.oy, e.b.ox - e.a.ox) / (Math.PI / 4)); });
+    const w = n => n.fixed ? 0 : 1;   // quota di spostamento: le stazioni fissate non si muovono
 
     const ROUNDS = 240;
     for (let it = 0; it < ROUNDS; it++) {
       const k = 0.6 * (1 - it / ROUNDS) + 0.05;
       for (const e of edges) {
         const ux = Math.cos(e.dir * Math.PI / 4), uy = Math.sin(e.dir * Math.PI / 4);
+        const wa = w(e.a), wb = w(e.b);
+        if (!wa && !wb) continue;
         const len = Math.max((e.b.x - e.a.x) * ux + (e.b.y - e.a.y) * uy, MIN);
-        const dx = (e.a.x + ux * len - e.b.x) * k / 2, dy = (e.a.y + uy * len - e.b.y) * k / 2;
-        e.b.x += dx; e.b.y += dy; e.a.x -= dx; e.a.y -= dy;
+        const dx = (e.a.x + ux * len - e.b.x) * k, dy = (e.a.y + uy * len - e.b.y) * k;
+        e.b.x += dx * wb / (wa + wb); e.b.y += dy * wb / (wa + wb); e.a.x -= dx * wa / (wa + wb); e.a.y -= dy * wa / (wa + wb);
       }
       for (let i = 0; i < nodes.length; i++) for (let j = i + 1; j < nodes.length; j++) {
         const a = nodes[i], b = nodes[j];
         let dx = b.x - a.x, dy = b.y - a.y, dist = Math.hypot(dx, dy);
         if (dist >= MIN) continue;
+        const wa = w(a), wb = w(b);
+        if (!wa && !wb) continue;
         if (dist < 1e-6) { dx = 1; dy = 0.3; dist = Math.hypot(dx, dy); }
-        const push = (MIN - dist) / 2 / dist;
-        a.x -= dx * push; a.y -= dy * push; b.x += dx * push; b.y += dy * push;
+        const push = (MIN - dist) / dist / (wa + wb);
+        a.x -= dx * push * wa; a.y -= dy * push * wa; b.x += dx * push * wb; b.y += dy * push * wb;
       }
     }
-    const taken = new Set();
+    const taken = new Set(fixed.map(n => n.x + ',' + n.y));
     for (const n of nodes) {
+      if (n.fixed) continue;
       let x = Math.round(n.x), y = Math.round(n.y);
       for (let r = 1; taken.has(x + ',' + y) && r < 20; r++) {
         const free = [];
@@ -126,10 +141,19 @@ const Schema = (() => {
   const overlap = (a, b) => a[0] < b[0] + b[2] && b[0] < a[0] + a[2] && a[1] < b[1] + b[3] && b[1] < a[1] + a[3];
 
   // ---- SVG ----
-  function build() {
+  // Rete disposta, pronta da disegnare (null se non c'è una linea con almeno due fermate)
+  function prepare() {
     const net = network();
     if (!net.lines.length) return null;
     layout(net);
+    return net;
+  }
+  const build = () => { const net = prepare(); return net && render(net).svg; };
+
+  // SVG della rete disposta: { svg, box (il riquadro [x, y, w, h] del disegno) }.
+  // opts.edit: anteprima modificabile (stazioni con data-id, anello tratteggiato sulle fissate);
+  // opts.box: riquadro da usare al posto di quello calcolato (mentre si trascina, lo schema non cambia scala)
+  function render(net, opts = {}) {
 
     // tracciati delle linee: per ogni tratto il percorso ottilineare, spostato di lato se il tratto è condiviso
     const segs = [];
@@ -208,23 +232,27 @@ const Schema = (() => {
     const day = new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
     const f = v => Math.round(v * 10) / 10;
     const d = pts => 'M' + pts.map(([x, y]) => `${f(x)},${f(y)}`).join(' L');
-    return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f(minX)} ${f(top)} ${f(width)} ${f(height)}" width="${f(width)}" height="${f(height)}" class="schema">
+    const box = [minX, top, width, height], [bx, by, bw, bh] = opts.box || box;
+    const hit = m => opts.edit ? ` data-id="${esc(m.n.id)}"` : '';
+    const ring = m => opts.edit && m.n.fixed
+      ? `\n    <circle cx="${f(m.n.px)}" cy="${f(m.n.py)}" r="${f(m.r + 5)}" fill="none" stroke="#e0b84f" stroke-width="2" stroke-dasharray="3 3"/>` : '';
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${f(bx)} ${f(by)} ${f(bw)} ${f(bh)}" width="${f(bw)}" height="${f(bh)}" class="schema${opts.edit ? ' editing' : ''}">
   <style>
     text { font-family: Inter, 'Segoe UI', Arial, sans-serif; fill: #14181f; }
     .st { font-size: ${FS}px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
     .tt { font-size: 22px; font-weight: 800; } .sub { font-size: 12px; fill: #5b6470; }
     .lg-h { font-size: 11px; font-weight: 700; fill: #5b6470; text-transform: uppercase; letter-spacing: .08em; } .lg { font-size: 13px; }
   </style>
-  <rect x="${f(minX)}" y="${f(top)}" width="${f(width)}" height="${f(height)}" fill="#fff"/>
+  <rect x="${f(bx)}" y="${f(by)}" width="${f(bw)}" height="${f(bh)}" fill="#fff"/>
   <text x="${f(minX + M)}" y="${f(top + 30)}" class="tt">Rete ferroviaria di Panera</text>
   <text x="${f(minX + M)}" y="${f(top + 48)}" class="sub">The Railway Company · ${esc(day)}</text>
   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
 ${paths.map(p => `    <path d="${d(p.pts)}" stroke="${p.l.color}" stroke-width="${p.l.direct ? LW_DIRECT : LW}"/>`).join('\n')}
   </g>
   <g>
-${marks.map(m => m.inter
-    ? `    <circle cx="${f(m.n.px)}" cy="${f(m.n.py)}" r="${f(m.r)}" fill="#fff" stroke="#111" stroke-width="2.5"/>`
-    : `    <circle cx="${f(m.n.px)}" cy="${f(m.n.py)}" r="${m.r}" fill="#fff" stroke="${m.color}" stroke-width="2.5"/>`).join('\n')}
+${marks.map(m => (m.inter
+    ? `    <circle cx="${f(m.n.px)}" cy="${f(m.n.py)}" r="${f(m.r)}" fill="#fff" stroke="#111" stroke-width="2.5"${hit(m)}/>`
+    : `    <circle cx="${f(m.n.px)}" cy="${f(m.n.py)}" r="${m.r}" fill="#fff" stroke="${m.color}" stroke-width="2.5"${hit(m)}/>`) + ring(m)).join('\n')}
   </g>
   <g>
 ${labels.map(t => `    <text x="${f(t.x)}" y="${f(t.y)}" text-anchor="${t.anchor}" class="st">${esc(t.n.name)}</text>`).join('\n')}
@@ -233,7 +261,24 @@ ${labels.map(t => `    <text x="${f(t.x)}" y="${f(t.y)}" text-anchor="${t.anchor
 ${legend.map(s => '    ' + s).join('\n')}
   </g>
 </svg>`;
+    return { svg, box };
   }
 
-  return { build };
+  // Posizione (in unità di griglia) per la stazione n trascinata nel punto (rx, ry): la cella più vicina, oppure, se
+  // si è a meno di 0,6 celle, il punto che la allinea a 0°/45°/90° con una stazione collegata. null se la cella è
+  // occupata da un'altra stazione.
+  function snap(net, n, rx, ry) {
+    let best = [Math.round(rx), Math.round(ry)], bestD = 0.6;
+    const nbs = net.edges.flatMap(e => e.a === n ? [e.b] : e.b === n ? [e.a] : []);
+    for (const m of nbs) for (let k = 0; k < 8; k++) {
+      const ux = Math.round(Math.cos(k * Math.PI / 4)), uy = Math.round(Math.sin(k * Math.PI / 4));
+      const t = ((rx - m.x) * ux + (ry - m.y) * uy) / (ux * ux + uy * uy);
+      if (t < 0.5) continue;
+      const c = [m.x + Math.round(t) * ux, m.y + Math.round(t) * uy], dist = Math.hypot(c[0] - rx, c[1] - ry);
+      if (dist < bestD) { best = c; bestD = dist; }
+    }
+    return net.nodes.some(o => o !== n && o.x === best[0] && o.y === best[1]) ? null : best;
+  }
+
+  return { GRID, build, prepare, render, snap };
 })();

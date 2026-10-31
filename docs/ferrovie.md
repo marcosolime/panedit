@@ -1,7 +1,7 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **fasi 1–5 completate** (il formato del file è stabile dalla fase 2); fase 6 (facoltativa) da fare (31/10/2026). Le nuove
+Stato: **piano completato** (01/11/2026): fasi 1–6 realizzate. Le nuove
 funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
@@ -58,7 +58,7 @@ Due nuovi `kind` in `KINDS` ([viewer/js/model.js](../viewer/js/model.js)), aggiu
 
 | `kind` | Geometria | Proprietà specifiche |
 |---|---|---|
-| `stazione` | Point | — (in fase 6: `schema`) |
+| `stazione` | Point | `schema` (facoltativo, fase 6): `[x, y]` nello schema della rete |
 | `linea` | LineString | `color`, `subtype`: `direttissima` · `fermate` |
 
 Proprietà comuni come per gli altri tipi: `id`, `name`, `notes`, `label`.
@@ -293,11 +293,26 @@ sistemare a mano.
 Riferimento per approfondire: il disegno ottilineare ottimo è un problema noto in letteratura (Nöllenburg e
 Wolff, programmazione lineare intera); qui non serve, ma è utile se le euristiche non bastano.
 
-### Fase 6: rifiniture (facoltative)
+### Fase 6: rifiniture (facoltative) ✔
 
-- **Vista Schema** con ritocco manuale: si trascinano le stazioni con aggancio a griglia e a 45°; la posizione si
-  salva nella stazione come `schema: [x, y]`, così lo schema resta stabile tra un'esportazione e l'altra.
-- Ricerca (Ctrl+K) estesa a stazioni e linee.
+**Fatta** (01/11/2026).
+- Ricerca (Ctrl+K) estesa a stazioni e linee: **già funzionante**, la ricerca copre tutte le entità per nome.
+- **Vista Schema con ritocco manuale**: l'anteprima dello schema è modificabile.
+  - Si trascinano le stazioni; `Schema.snap` le porta sulla cella di griglia più vicina o, entro 0,6 celle, sul
+    punto che le allinea a 0°/45°/90° con una stazione collegata (una cella occupata non si accetta). Durante il
+    trascinamento lo schema si ridisegna con il riquadro fermo, senza ricalcolare la disposizione.
+  - Al rilascio la posizione si salva nella stazione come `schema: [x, y]` (unità di griglia; `Edit.setSchema`, un
+    passo di annullamento). Campo facoltativo: il formato resta alla `version: 1`.
+  - `layout` tiene ferme le stazioni fissate (non si spostano né negli aggiustamenti né nell'allineamento alla
+    griglia); le libere partono sempre dalle coordinate reali centrate, così spostarne una non trascina tutto lo
+    schema, e gli aggiustamenti le collegano a quelle fissate vicine (una stazione libera unita da un tratto
+    orizzontale a una fissata, per esempio, si riallinea con lei).
+  - *Fissa tutte* salva la posizione attuale di tutte le stazioni (schema "ufficiale" stabile tra un'esportazione e
+    l'altra); *Disposizione automatica* le cancella; doppio clic su una stazione: torna automatica.
+  - Nell'anteprima le stazioni fissate hanno un anello tratteggiato; export SVG e PDF usano lo schema senza i segni
+    della modifica.
+  - Lo schema si ricalcola a ogni modifica dello Store mentre è aperto (spostamenti salvati, Ctrl+Z).
+- Non fatto: posizione dei nomi scelta a mano (oggi automatica, tra 8 posizioni).
 
 ## File coinvolti
 

@@ -50,7 +50,8 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 - **Pannelli richiudibili**: le linguette a freccia sui bordi della mappa chiudono e riaprono i pannelli.
   A sinistra, da chiuso resta la colonna dei tipi: un clic su un tipo apre il suo pannello, un nuovo clic
   sullo stesso tipo lo richiude. L'ispettore a destra si chiude del tutto e si riapre da solo quando crei
-  una nuova entità, per darle il nome.
+  una nuova entità, per darle il nome. All'apertura dell'editor i pannelli sono chiusi e la mappa è a zoom 0
+  (ricaricando la pagina resta la vista di prima, salvata nell'indirizzo).
 - **Ispettore a destra**: nome, tipo, regno, categoria, colore, etichetta (dimensione, rotazione, posizione),
   misure, note.
 - **Ferrovie**: dal pannello *Ferrovie* (tasto 9) si creano stazioni e linee. Una **stazione** si crea anche con il
@@ -79,6 +80,11 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   comuni, interscambi come cerchi bianchi bordati di nero, legenda divisa per categoria). **Esporta SVG** scarica
   il file (rifinibile in Inkscape); **Esporta PDF** apre la stampa del browser su un foglio A3 orizzontale: scegli
   *Salva come PDF*. Esc chiude lo schema.
+  Lo schema si **ritocca a mano**: si trascinano le stazioni (aggancio alla griglia e agli allineamenti a 0°, 45° e
+  90° con le stazioni collegate); la posizione resta salvata nella stazione e la disposizione automatica sistema solo
+  le altre (le fissate hanno un anello tratteggiato, che non compare nell'export). Doppio clic su una stazione fissata:
+  perde la posizione manuale e torna automatica. *Fissa tutte* blocca lo schema com'è (per uno schema "ufficiale" stabile); *Disposizione automatica*
+  cancella tutte le posizioni fissate. Ctrl+Z annulla.
 
   Modificando la rete:
   - **spostare una stazione** (trascinandola o dalle coordinate) sposta con lei le linee che ci fermano;
@@ -175,7 +181,7 @@ gioco **[x, z] in blocchi** (z cresce verso sud), non latitudine/longitudine.
 | `acqua` | LineString / Polygon | `subtype`: fiume, torrente, canale, lago, laguna, mare, oceano, golfo, baia, stretto |
 | `localita` | Point | `subtype`: capitale, citta, villaggio, castello, porto, luogo · `kingdom` (facoltativo) |
 | `linea` | LineString | linea ferroviaria: `color` · `subtype`: `fermate` (con fermate), `direttissima` |
-| `stazione` | Point | — (una linea ferma nelle stazioni che coincidono con i suoi vertici) |
+| `stazione` | Point | `schema` (facoltativo): `[x, y]` nello schema della rete, se sistemata a mano. Una linea ferma nelle stazioni che coincidono con i suoi vertici |
 
 Un territorio LineString è una DMZ: `margin` è la distanza in blocchi della fascia cuscinetto da ciascun lato
 della linea (`0` = solo la linea). La categoria `area` / `dmz` si ricava dalla geometria.

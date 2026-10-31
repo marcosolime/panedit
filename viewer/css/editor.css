@@ -444,7 +444,9 @@ body.file-over #dropOverlay { display: flex; }
 .sv-bar { display: flex; align-items: center; gap: 10px; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
 .sv-bar .grow { flex: 1; }
 .sv-body { flex: 1; min-height: 0; overflow: auto; padding: 20px; display: flex; }
-.sv-body svg { margin: auto; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.45); }
+.sv-body svg { margin: auto; max-width: 100%; height: auto; border-radius: 6px; box-shadow: 0 6px 30px rgba(0,0,0,.45); touch-action: none; }
+.sv-body svg.editing circle[data-id] { cursor: grab; }
+.sv-bar .muted { font-size: 12px; }
 
 /* stampa (Esporta PDF): solo lo schema, su un foglio A3 orizzontale */
 @media print {
