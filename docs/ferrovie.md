@@ -1,7 +1,7 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **fase 1 completata**, fasi 2–6 da fare (31/10/2026). Le nuove
+Stato: **fasi 1 e 2 completate**: il formato del file è stabile; fasi 3–6 da fare (31/10/2026). Le nuove
 funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
@@ -41,6 +41,16 @@ restando alla `version: 1`.
 | Aspetto delle stazioni | **cerchi con il nome accanto, come le località**: stessa etichetta (posizione del nome a destra / sinistra / sopra / sotto con `label.anchor`, dimensione, "Mostra il nome") e stesso comportamento allo zoom; interscambi bianchi con il bordo nero |
 | Nome delle linee sulla mappa | **mostrato**, lungo il tracciato come per fiumi e DMZ (ripetizioni automatiche o da 1 a 10 con *Ripetizioni del nome*, dimensione, rotazione); si nasconde con **"Mostra il nome sulla mappa"** come per tutte le etichette |
 | Categoria delle linee | **`subtype`** (`direttissima` · `fermate`) con il meccanismo esistente: menu Categoria nell'ispettore e gruppi nel pannello già pronti; default in `Model.fitProps` |
+
+### Decisioni per la fase 2 (31/10/2026)
+
+| Tema | Decisione |
+|---|---|
+| Spostare una stazione | porta **sempre** con sé i vertici delle linee che ci fermano (indipendentemente da *Confini collegati*) |
+| Trascinare un vertice-fermata di una linea | sposta **anche la stazione** e i vertici delle altre linee che ci fermano |
+| Stazione posata sul binario | diventa una fermata di **ogni** linea che passa di lì, direttissime comprese |
+| Prolungamento | nessuno strumento apposito: si trascina il capolinea (la stazione lo segue) e si aggiungono vertici; se la vecchia stazione di capolinea deve restare come fermata intermedia, la si ricrea sul binario |
+| Regola di unicità violata | l'editor **rifiuta** la modifica con un messaggio di avvertimento |
 
 ## Modello dati
 
@@ -156,7 +166,25 @@ facoltativo).
 **Fatta quando**: si traccia una rete di prova (almeno 5 stazioni, 2 linee con un interscambio, 1 linea
 circolare), la si salva e il file riaperto è identico.
 
-### Fase 2: modifica della rete
+### Fase 2: modifica della rete ✔
+
+**Fatta** (31/10/2026). Nuovo modulo [rail.js](../viewer/js/rail.js) con funzioni pure (`Rail.isRing`, `stops`,
+`duplicate`, `linesAt`), che servirà anche alle fasi 3 e 4; `Geo.nearestOnLine` per posare una stazione sul binario.
+In [tools.js](../viewer/js/tools.js):
+- `Edit.movePoint` (trascinamento e campi X/Z dell'ispettore): la stazione porta con sé i vertici delle linee che
+  ci fermano (`Geo.moveVertex`, quindi nell'anello primo e ultimo insieme); una stazione senza linee che arriva su
+  un binario vi si aggancia; si rifiuta l'arrivo su un'altra stazione.
+- `railVertexMoved` + `geometryEdited`: trascinando un vertice-fermata si spostano stazione e altre linee; la
+  geometria della linea è ricalcolata (nell'anello si sposta anche l'altro vertice di chiusura, e la linea si
+  ridisegna).
+- `stopOnTracks`: una stazione nuova (o spostata) su un binario entro 14 px diventa fermata di ogni linea che passa
+  di lì; la prima linea porta la stazione esattamente sul binario (o sul suo vertice, se vicino).
+- Eliminazione di una stazione: avviso con le linee che perdono la fermata e quelle che restano senza capolinea.
+- Regola di unicità (`Rail.duplicate`) controllata alla creazione della linea, allo spostamento di stazioni e
+  vertici e all'aggiunta di vertici: la modifica è rifiutata con un avviso e l'entità ridisegnata com'era
+  (`Render.redraw`).
+- Prolungamento: nessun codice (vedi le decisioni).
+
 
 - **Spostare una stazione** sposta i vertici coincidenti di tutte le linee che ci fermano, in un solo passo di
   annullamento. È il meccanismo dei confini collegati (`Geo.moveVertex`, `Edit.vertexDragStart` /
@@ -234,12 +262,12 @@ Wolff, programmazione lineare intera); qui non serve, ma è utile se le euristic
 |---|---|
 | [viewer/js/model.js](../viewer/js/model.js): `KINDS`, `KIND_ORDER`, `make`, `normalize`, `Store.load` | 1 |
 | [viewer/js/io.js](../viewer/js/io.js): controllo della versione del file | 1 |
-| [viewer/js/geo.js](../viewer/js/geo.js): `countVertices` per le LineString chiuse | 1 |
+| [viewer/js/geo.js](../viewer/js/geo.js): `countVertices` per le LineString chiuse, `nearestOnLine` | 1, 2 |
 | [viewer/js/tools.js](../viewer/js/tools.js): strumenti Stazione e Linea, operazioni in `Edit` | 1, 2 |
 | [viewer/js/render.js](../viewer/js/render.js): stile di linee e stazioni, evidenziazione del percorso | 1, 3, 4 |
 | [viewer/js/ui.js](../viewer/js/ui.js): pannello, ispettori, calcolatore di percorso, esportazione | 1, 3, 4, 5 |
 | [viewer/js/icons.js](../viewer/js/icons.js), [viewer/index.html](../viewer/index.html), [viewer/css/editor.css](../viewer/css/editor.css) | 1, 4, 5 |
-| `viewer/js/rail.js` (nuovo): fermate, segmenti, grafo, Dijkstra | 3, 4 |
+| [viewer/js/rail.js](../viewer/js/rail.js): fermate, regola di unicità (fase 2); segmenti, grafo, Dijkstra | 2, 3, 4 |
 | `viewer/js/schema.js` (nuovo): disposizione ottilineare, SVG, PDF | 5, 6 |
 | [README.md](../README.md) | ogni fase |
 

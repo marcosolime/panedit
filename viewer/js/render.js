@@ -537,6 +537,7 @@ const Render = (() => {
   return {
     init, hooks, state, select, setHover, setGroup, setEditing, zoomTo, boundsOf, setHidden, setLocked,
     colorOf, kingdomOf, kingdomsOf, kingdomShape, autoSize, autoRepeat, restyleAll, updateLabels, esc, mix,
-    get map() { return map; }, item: id => items.get(id)
+    get map() { return map; }, item: id => items.get(id),
+    redraw: id => sync(id)   // ridisegna un'entità dallo Store (es. dopo una modifica rifiutata)
   };
 })();

@@ -102,6 +102,8 @@ const Edit = (() => {
     if (pts.length < 2) return null;
     const ring = pts.length >= 4 && Math.hypot(pts[0][0] - pts.at(-1)[0], pts[0][1] - pts.at(-1)[1]) <= tol;
     if (ring) pts[pts.length - 1] = pts[0].slice();
+    const dup = Rail.duplicate(pts);
+    if (dup) { UI.toast(dupMsg('La linea', dup), 'warn'); return null; }
     Store.open('Crea linea ferroviaria');
     let made = 0;
     for (const v of ring ? [pts[0]] : [pts[0], pts.at(-1)]) {
@@ -121,10 +123,72 @@ const Edit = (() => {
 
   function createPoint(want, pos) {
     const kind = targetKind(want, 'Point');
+    if (kind === 'stazione' && stationAt(pos)) { UI.toast(`C'è già una stazione in quel punto`, 'warn'); return null; }
+    Store.open(`Crea ${KINDS[kind].label.toLowerCase()}`);
+    // una stazione posata su un binario diventa una fermata di quella linea (e delle altre che passano di lì)
+    if (kind === 'stazione') pos = stopOnTracks(pos, railTol(), true);
     const f = Model.make(kind, baseProps(kind), { type: 'Point', coordinates: pos });
-    Store.put(f, { label: `Crea ${KINDS[kind].label.toLowerCase()}` });
+    Store.put(f);
     Store.commit();
     return f.id;
+  }
+
+  // ---- ferrovie: stazioni e fermate (regole in docs/ferrovie.md) ----
+  // Distanza in blocchi entro cui una stazione "prende" un binario: 14 px allo zoom attuale
+  const railTol = () => 14 * Math.pow(2, -Render.map.getZoom());
+  const stationAt = (c, except) => Store.all('stazione').find(s => s.id !== except && Geo.same(s.geometry.coordinates, c));
+  const dupMsg = (what, st) => `${what} passerebbe due volte da «${st.properties.name}»: una stazione compare una sola volta ` +
+    'in una linea (tranne la chiusura di una linea circolare). Modifica annullata.';
+  // modifica rifiutata: si ridisegna l'entità com'era (dopo l'evento in corso, che appartiene al suo layer)
+  const rejectEdit = (id, msg) => { UI.toast(msg, 'warn'); setTimeout(() => Render.redraw(id), 0); };
+
+  // Stazione nel punto pos: ogni linea il cui binario passa entro tol e che non ci ferma già riceve un vertice e
+  // diventa una fermata. Con snap la stazione si sposta sul binario della prima linea trovata (o sul suo vertice,
+  // se è lì vicino); senza, il vertice si aggiunge nel punto della stazione. Restituisce la posizione della stazione.
+  function stopOnTracks(pos, tol, snap, skip = new Set()) {
+    for (const l of Store.all('linea')) {
+      if (skip.has(l.id) || l.geometry?.type !== 'LineString') continue;
+      const c = l.geometry.coordinates;
+      if (c.some(v => Geo.same(v, pos))) continue;
+      const n = Geo.nearestOnLine(c, pos);
+      if (!n || n.dist > tol) continue;
+      if (snap) {
+        const v = [c[n.seg], c[n.seg + 1]].find(x => Math.hypot(x[0] - n.pos[0], x[1] - n.pos[1]) <= tol / 3);
+        pos = (v || n.pos).slice();
+        snap = false;
+      }
+      const lc = clone(l);
+      if (!lc.geometry.coordinates.some(v => Geo.same(v, pos))) lc.geometry.coordinates.splice(n.seg + 1, 0, pos.slice());
+      Store.put(lc);
+    }
+    return pos;
+  }
+
+  // Sposta un punto. Una stazione porta con sé i vertici delle linee che ci fermano; se arriva su un binario
+  // diventa anche una fermata di quella linea. source: 'edit' se il marker è già stato trascinato sulla mappa.
+  function movePoint(id, pos, source) {
+    const f = clone(Store.get(id));
+    if (!f) return;
+    if (f.properties.kind !== 'stazione') {
+      f.geometry = { type: 'Point', coordinates: pos };
+      Store.put(f, { source, label: 'Sposta' });
+      Store.commit();
+      return;
+    }
+    const from = f.geometry.coordinates;
+    if (Geo.same(from, pos)) return;
+    if (stationAt(pos, id)) return rejectEdit(id, `C'è già una stazione in quel punto. Spostamento annullato.`);
+    const stations = Store.all('stazione').map(s => s.id === id ? { ...s, geometry: { type: 'Point', coordinates: pos } } : s);
+    const lines = Rail.linesAt(from).map(l => ({ l, g: Geo.moveVertex(l.geometry, from, pos) }));
+    const bad = lines.find(({ g }) => Rail.duplicate(g.coordinates, stations));
+    if (bad) return rejectEdit(id, dupMsg(`«${bad.l.properties.name}»`, Store.get(id)));
+    Store.open('Sposta stazione');
+    lines.forEach(({ l, g }) => { const c = clone(l); c.geometry = g; Store.put(c); });
+    // se la stazione non ha linee può agganciarsi al binario; se ne ha, resta dove la si è lasciata
+    const at = stopOnTracks(pos, railTol(), !lines.length, new Set(lines.map(({ l }) => l.id)));
+    f.geometry = { type: 'Point', coordinates: at };
+    Store.put(f, { source: Geo.same(at, pos) ? source : undefined });
+    Store.commit();
   }
 
   function createKingdom(props = {}) {
@@ -170,12 +234,14 @@ const Edit = (() => {
   }
 
   // ---- modifiche dirette sulla mappa ----
-  let dragFrom = null;
+  let dragFrom = null, railDrag = null;
   function vertexDragStart(id, from) { dragFrom = from; }
   function vertexDragEnd(id, to) {
     const from = dragFrom; dragFrom = null;
     const f = Store.get(id);
-    if (!Settings.link || !from || !f || Geo.same(from, to, 0)) return;
+    if (!from || !f || Geo.same(from, to, 0)) return;
+    if (f.properties.kind === 'linea') { railVertexMoved(f, from, to); return; }
+    if (!Settings.link) return;
     const group = political(f) ? POLITICAL : [f.properties.kind];
     for (const k of group) for (const o of Store.all(k)) {
       if (o.id === id || !o.geometry) continue;
@@ -183,18 +249,49 @@ const Edit = (() => {
       if (g) { const c = clone(o); c.geometry = g; Store.put(c, { label: 'Sposta vertice' }); }
     }
   }
+  // Vertice di una linea ferroviaria trascinato (subito dopo arriva geometryEdited con la geometria del layer).
+  // Se era una fermata, la stazione e le altre linee che ci fermano lo seguono. Si sposta ogni vertice della linea
+  // che stava lì: nella linea circolare, primo e ultimo insieme.
+  function railVertexMoved(f, from, to) {
+    const st = stationAt(from), own = Geo.moveVertex(f.geometry, from, to);
+    if (st && stationAt(to, st.id)) { railDrag = { id: f.id, reject: `C'è già una stazione in quel punto. Modifica annullata.` }; return; }
+    const stations = Store.all('stazione').map(s => s === st ? { ...s, geometry: { type: 'Point', coordinates: to } } : s);
+    const others = st ? Rail.linesAt(from).filter(l => l.id !== f.id).map(l => ({ l, g: Geo.moveVertex(l.geometry, from, to) })) : [];
+    const bad = [{ l: f, g: own || f.geometry }, ...others].find(({ g }) => Rail.duplicate(g.coordinates, stations));
+    if (bad) { railDrag = { id: f.id, reject: dupMsg(`«${bad.l.properties.name}»`, Rail.duplicate(bad.g.coordinates, stations)) }; return; }
+    if (st) {
+      const c = clone(st); c.geometry = { type: 'Point', coordinates: to.slice() };
+      Store.put(c, { label: 'Sposta fermata' });
+      others.forEach(({ l, g }) => { const c2 = clone(l); c2.geometry = g; Store.put(c2); });
+    }
+    railDrag = { id: f.id, geometry: own };
+  }
+
   function geometryEdited(id, g) {
     const f = clone(Store.get(id));
     if (!f) return;
+    if (f.properties.kind === 'linea') {
+      const drag = railDrag?.id === id ? railDrag : null;
+      railDrag = null;
+      if (drag?.reject) { rejectEdit(id, drag.reject); return; }
+      // vertice aggiunto o tolto: solo il controllo di unicità
+      const dup = !drag && Rail.duplicate(g.coordinates);
+      if (dup) { rejectEdit(id, dupMsg(`«${f.properties.name}»`, dup)); return; }
+      // la geometria calcolata può differire da quella del layer (anello): in quel caso si ridisegna la linea
+      const geom = drag?.geometry || g, redraw = JSON.stringify(geom) !== JSON.stringify(g);
+      f.geometry = geom;
+      Store.put(f, { source: redraw ? undefined : 'edit', label: 'Modifica linea' });
+      return;
+    }
     f.geometry = Geo.isPoly(g) ? (Geo.clean(g, 0) || f.geometry) : g;
     Store.put(f, { source: 'edit', label: 'Modifica confine' });
   }
   function labelMoved(id, pos, isShape) {
+    if (isShape) { movePoint(id, pos, 'edit'); return; }   // punto trascinato (località, stazione)
     const f = clone(Store.get(id));
     if (!f) return;
-    if (isShape) f.geometry = { type: 'Point', coordinates: pos };
-    else f.properties.label.pos = pos;
-    Store.put(f, { source: 'edit', label: isShape ? 'Sposta' : 'Sposta etichetta' });
+    f.properties.label.pos = pos;
+    Store.put(f, { source: 'edit', label: 'Sposta etichetta' });
   }
 
   // ---- proprietà ----
@@ -241,6 +338,14 @@ const Edit = (() => {
     const f = Store.get(id);
     if (!f) return;
     Store.open(`Elimina ${KINDS[f.properties.kind].label.toLowerCase()}`);
+    // stazione: sulle linee il vertice resta come semplice curva; si avvisa delle fermate e dei capolinea persi
+    if (f.properties.kind === 'stazione') {
+      const c = f.geometry.coordinates, lines = Rail.linesAt(c);
+      const ends = lines.filter(l => { const v = l.geometry.coordinates; return Geo.same(v[0], c) || Geo.same(v.at(-1), c); });
+      const names = ls => ls.map(l => `«${l.properties.name}»`).join(', ');
+      if (lines.length) UI.toast(`«${f.properties.name}» non è più una fermata di ${names(lines)}` +
+        (ends.length ? `; ${names(ends)} ${ends.length === 1 ? 'resta' : 'restano'} senza capolinea in quel punto` : ''), 'warn');
+    }
     if (f.properties.kind === 'regno') {
       for (const o of Store.all()) {
         const ks = Model.kingdomIds(o.properties);
@@ -284,7 +389,7 @@ const Edit = (() => {
   }
 
   return {
-    createArea, createLine, createRailLine, createPoint, createKingdom, addArea, subArea, replaceArea,
+    createArea, createLine, createRailLine, createPoint, movePoint, createKingdom, addArea, subArea, replaceArea,
     vertexDragStart, vertexDragEnd, geometryEdited, labelMoved, update, setKingdom, addKingdom, removeKingdom, moveKingdom, remove, simplify,
     explode, targetKind, validKingdom
   };

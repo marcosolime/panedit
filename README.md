@@ -62,6 +62,15 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   - clic sul **primo punto** = chiude una **linea circolare** e termina;
   - clic sull'ultimo punto, doppio clic o Invio = fine;
   - un capolinea fuori da una stazione **crea la stazione** (da rinominare).
+
+  Modificando la rete:
+  - **spostare una stazione** (trascinandola o dalle coordinate) sposta con lei le linee che ci fermano;
+    **trascinare un vertice-fermata** di una linea sposta anche la stazione e le altre linee che ci fermano;
+  - una **stazione posata su un binario** diventa una fermata di ogni linea che passa di lì (direttissime comprese);
+  - **eliminando una stazione** il vertice resta come semplice curva, con un avviso se era una fermata o un capolinea;
+  - per **prolungare** una linea si trascina il capolinea (la stazione lo segue) e si aggiungono vertici;
+  - una stazione compare **una sola volta** in una linea (tranne la chiusura di una linea circolare): le modifiche
+    che violerebbero la regola vengono annullate con un avviso.
 - **DMZ** (Green Line, Blackline…): da **+ Nuovo territorio** → *DMZ (linea per punti)*, oppure con lo strumento
   *Linea per punti* (D) e **Crea** su *Territorio*, si traccia la linea principale. Nasce come semplice linea divisoria; nell'ispettore il campo **Margine** (blocchi per lato)
   la allarga in una fascia cuscinetto larga il doppio del margine. Il nome si ripete lungo la linea. Nel pannello

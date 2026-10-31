@@ -737,7 +737,7 @@ const UI = (() => {
       } else if (t.dataset.c) {
         const f = Store.get(id), c = f.geometry.coordinates.slice();
         c[+t.dataset.c] = Geo.r1(+t.value || 0);
-        Edit.update(id, (p, ff) => { ff.geometry = { type: 'Point', coordinates: c }; }, { label: 'Sposta' });
+        Edit.movePoint(id, c);   // una stazione porta con sé le linee che ci fermano
       } else if (t.dataset.s === 'simplify') {
         Settings.simplify = Math.max(0.5, +t.value || 2); Settings.save();
       }

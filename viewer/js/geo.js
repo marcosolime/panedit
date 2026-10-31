@@ -214,6 +214,18 @@ const Geo = (() => {
   }
 
   // Sposta i vertici di g che coincidono con 'from'
+  // Punto della linea l più vicino a p: { pos (arrotondato a 0,1), seg (il punto sta tra l[seg] e l[seg + 1]), dist }
+  function nearestOnLine(l, p) {
+    let best = null;
+    for (let i = 1; i < l.length; i++) {
+      const a = l[i - 1], b = l[i], dx = b[0] - a[0], dz = b[1] - a[1], len2 = dx * dx + dz * dz;
+      const t = len2 ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dz) / len2)) : 0;
+      const q = [a[0] + t * dx, a[1] + t * dz], dist = Math.hypot(p[0] - q[0], p[1] - q[1]);
+      if (!best || dist < best.dist) best = { pos: [r1(q[0]), r1(q[1])], seg: i - 1, dist };
+    }
+    return best;
+  }
+
   function moveVertex(g, from, to) {
     let moved = 0;
     const out = mapLines(g, l => l.map(p => same(p, from) ? (moved++, [to[0], to[1]]) : p));
@@ -339,6 +351,6 @@ const Geo = (() => {
   return {
     r1, ll, xz, same, isPoly, isLine, toLatLngs, fromLayer, eachCoord, mapLines, polygons,
     bbox, bboxHit, bounds, countVertices, area, length, clean, union, unionAll, diff, fix, simplify,
-    rdp, stitch, moveVertex, polylabel, labelPoint, lineAt, closeRing
+    rdp, stitch, moveVertex, nearestOnLine, polylabel, labelPoint, lineAt, closeRing
   };
 })();
