@@ -56,13 +56,17 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   misure, note.
 - **Ferrovie**: dal pannello *Ferrovie* (tasto 9) si creano stazioni e linee. Una **stazione** si crea anche con il
   Punto (K) e **Crea** su *Stazione*: è un cerchio con il nome accanto, bianco e bordato di nero se è un
-  interscambio (ci fermano due o più linee). Una **linea** si traccia con *Linea per punti* (D) e **Crea** su
-  *Linea ferroviaria*; nella barra si scelgono categoria (*con fermate* / *direttissima*) e colore della prossima
-  linea. Durante il disegno:
-  - clic su una stazione = **fermata** (il vertice va esattamente sulla stazione); clic altrove = curva del binario;
+  interscambio (ci fermano due o più linee). Una **linea** si traccia con lo strumento **Posa binari** (T, anche da
+  "+ Nuova linea"): i binari vanno solo **in orizzontale o in verticale**, oppure **a 45°** con l'interruttore
+  **Zig-zag** (X) nella barra, che si può cambiare anche a metà linea. Nella barra si scelgono anche categoria
+  (*con fermate* / *direttissima*) e colore della prossima linea. Durante il disegno:
+  - ogni clic posa un tratto lungo l'asse (o la diagonale) verso il puntatore; accanto al puntatore c'è la sua lunghezza;
+  - clic su una stazione = **fermata**: il binario arriva esattamente sulla stazione, con un gomito se non è allineata;
   - clic sul **primo punto** = chiude una **linea circolare** e termina;
-  - clic sull'ultimo punto, doppio clic o Invio = fine;
+  - clic sull'ultimo punto, doppio clic o Invio = fine; Backspace toglie l'ultimo punto;
   - un capolinea fuori da una stazione **crea la stazione** (da rinominare).
+
+  Modificando poi la linea (vertici, stazioni) i tratti possono diventare obliqui: l'ispettore lo segnala.
 
   Nell'**ispettore**: una linea mostra capolinea (o *Circolare*), le fermate in ordine con la progressiva in km e la
   lunghezza di ogni tratto, la lunghezza totale e un avviso se un capolinea non è una stazione; una stazione mostra
@@ -110,7 +114,8 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 | F | Area a mano libera (tieni premuto e disegna il contorno) |
 | P | Area per punti (clic sul primo punto o Invio per chiudere) |
 | L | Linea a mano libera (fiumi) |
-| D | Linea per punti (DMZ, linee ferroviarie, linee dritte): clic per i punti, due clic = linea dritta, Invio o clic sull'ultimo punto per finire |
+| D | Linea per punti (DMZ, fiumi e canali, linee dritte): clic per i punti, due clic = linea dritta, Invio o clic sull'ultimo punto per finire |
+| T | Posa binari (linee ferroviarie): solo tratti orizzontali e verticali, o a 45° con **Zig-zag** (X); Backspace toglie l'ultimo punto |
 | K | Punto: una località, oppure una stazione con **Crea** su *Stazione* (sono gli unici tipi che si creano come punto) |
 | B / E | Pennello / gomma: aggiunge o toglie area all'entità selezionata |
 | R | Ridisegna l'intero confine dell'entità selezionata |

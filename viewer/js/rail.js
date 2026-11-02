@@ -29,6 +29,16 @@ const Rail = (() => {
   // Linee che hanno un vertice nel punto c (cioè che fermano lì, se c'è una stazione)
   const linesAt = c => Store.all('linea').filter(l => l.geometry?.type === 'LineString' && l.geometry.coordinates.some(v => Geo.same(v, c)));
 
+  // Tratti né orizzontali/verticali né a 45° (Posa binari traccia solo quelli; possono nascere spostando vertici o stazioni)
+  function oblique(c) {
+    let n = 0;
+    for (let i = 1; i < c.length; i++) {
+      const dx = Math.abs(c[i][0] - c[i - 1][0]), dz = Math.abs(c[i][1] - c[i - 1][1]);
+      if (Math.min(dx, dz) > 0.1 && Math.abs(dx - dz) > 0.1) n++;
+    }
+    return n;
+  }
+
   // Distanza lungo il binario dal primo vertice fino a ciascun vertice
   function cumulative(c) {
     const out = [0];
@@ -50,6 +60,8 @@ const Rail = (() => {
       if (st[0]?.i !== 0) warnings.push('Il capolinea di partenza non è una stazione');
       if (st.at(-1)?.i !== c.length - 1) warnings.push('Il capolinea di arrivo non è una stazione');
     }
+    const n = oblique(c);
+    if (n) warnings.push(`${n === 1 ? 'Un tratto è obliquo' : `${n} tratti sono obliqui`}: i binari vanno in orizzontale, in verticale o a zig-zag (45°)`);
     return { ring, stops: st, segments, total, warnings };
   }
 
@@ -130,5 +142,5 @@ const Rail = (() => {
     return { length: best.get(end).d, changes: legs.length - 1, legs };
   }
 
-  return { isRing, stops, duplicate, linesAt, lineInfo, stationInfo, graph, route };
+  return { isRing, stops, duplicate, linesAt, oblique, lineInfo, stationInfo, graph, route };
 })();

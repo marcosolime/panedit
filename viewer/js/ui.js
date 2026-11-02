@@ -510,7 +510,7 @@ const UI = (() => {
     const opts = [];
     if (geoms.includes('Polygon')) opts.push(['freehand', 'Area a mano libera', 'F'], ['polygon', 'Area per punti', 'P']);
     if (k === 'territorio') opts.push(['polyline', 'DMZ (linea per punti)', 'D']);
-    else if (k === 'linea') opts.push(['polyline', 'Linea per punti', 'D']);
+    else if (k === 'linea') opts.push(['track', 'Posa binari', 'T']);
     else if (geoms.includes('LineString')) opts.push(['line', 'Linea a mano libera (fiume)', 'L'], ['polyline', 'Fiume o canale per punti', 'D']);
     if (geoms.includes('Point')) opts.push(['point', 'Punto sulla mappa', 'K']);
     if (opts.length === 1) { Tools.set(opts[0][0]); return; }
@@ -546,7 +546,7 @@ const UI = (() => {
 
   // ---------------------------------------------------------------- barra strumenti
   function buildToolstrip() {
-    const tools = ['select', 'freehand', 'polygon', 'line', 'polyline', 'point', null, 'add', 'sub', 'redraw'];
+    const tools = ['select', 'freehand', 'polygon', 'line', 'polyline', 'track', 'point', null, 'add', 'sub', 'redraw'];
     $('#tsTools').innerHTML = tools.map(t => t ? `<button class="tool" data-tool="${t}" title="${esc(Tools.META[t].name)} (${Tools.META[t].key})">${ICONS[t]}</button>` : '<span class="ts-sep"></span>').join('');
     $('#tsTools').addEventListener('click', e => { const b = e.target.closest('[data-tool]'); if (b) Tools.set(b.dataset.tool); });
     $('#optTarget').addEventListener('change', e => { Settings.target = e.target.value; Settings.save(); renderToolstrip(); onTool(Tools.tool); });
@@ -562,6 +562,8 @@ const UI = (() => {
     // prossima linea ferroviaria: categoria (ricordata) e colore (solo per la prossima, poi torna al primo libero)
     $('#optRailType').addEventListener('change', e => { Settings.railType = e.target.value; Settings.save(); });
     $('#optRailColor').addEventListener('input', e => { Settings.railColor = e.target.value; Settings.save(); });
+    $('#optZigzag').innerHTML = ICONS.zigzag + '<span>Zig-zag</span>';
+    $('#optZigzag').addEventListener('click', () => Tools.setZigzag(!Settings.zigzag));
     $('#optSnap').innerHTML = ICONS.magnet + '<span>Aggancio</span>';
     $('#optLink').innerHTML = ICONS.link + '<span>Confini collegati</span>';
     $('#optSnap').addEventListener('click', () => { Settings.snap = !Settings.snap; Settings.save(); renderToolstrip(); Render.setEditing(Tools.tool === 'select'); });
@@ -572,12 +574,13 @@ const UI = (() => {
   }
 
   // Menu Crea: solo i tipi compatibili con lo strumento di disegno attivo. Se il tipo scelto non lo è, si passa a
-  // quello tipico dello strumento (aree → marca, linea a mano libera → fiume, per punti → territorio, punto → località)
+  // quello tipico dello strumento (aree → marca, linea a mano libera → fiume, per punti → territorio, punto → località).
+  // Le linee ferroviarie si tracciano solo con Posa binari, che crea solo quelle.
   const TOOL_TARGET = { freehand: ['Polygon', 'marca'], polygon: ['Polygon', 'marca'], line: ['LineString', 'acqua'],
-    polyline: ['LineString', 'territorio'], point: ['Point', 'localita'] };
+    polyline: ['LineString', 'territorio'], track: ['LineString', 'linea'], point: ['Point', 'localita'] };
   function targetOptions() {
     const t = TOOL_TARGET[Tools.tool];
-    const ok = KIND_ORDER.filter(k => k !== 'regno' && (!t || KINDS[k].geom.includes(t[0])));
+    const ok = KIND_ORDER.filter(k => k !== 'regno' && (!t || (KINDS[k].geom.includes(t[0]) && (k === 'linea') === (Tools.tool === 'track'))));
     if (t && !ok.includes(Settings.target)) { Settings.target = t[1]; Settings.save(); }
     $('#optTarget').innerHTML = ok.map(k => `<option value="${k}">${esc(KINDS[k].label)}</option>`).join('');
     $('#optTarget').value = Settings.target;
@@ -597,6 +600,8 @@ const UI = (() => {
     $('#optRailWrap').hidden = Settings.target !== 'linea';
     $('#optRailType').value = Settings.railType;
     $('#optRailColor').value = Settings.railColor || Model.nextColor('linea');
+    $('#optZigzag').hidden = Tools.tool !== 'track';
+    $('#optZigzag').classList.toggle('on', Settings.zigzag);
     $('#optSnap').classList.toggle('on', Settings.snap);
     $('#optLink').classList.toggle('on', Settings.link);
   }
@@ -1148,7 +1153,7 @@ const UI = (() => {
 
   // ---------------------------------------------------------------- scorciatoie
   function bindKeys() {
-    const TOOLKEYS = { v: 'select', f: 'freehand', p: 'polygon', l: 'line', d: 'polyline', k: 'point', b: 'add', e: 'sub', r: 'redraw' };
+    const TOOLKEYS = { v: 'select', f: 'freehand', p: 'polygon', l: 'line', d: 'polyline', t: 'track', k: 'point', b: 'add', e: 'sub', r: 'redraw' };
     document.addEventListener('keydown', e => {
       const mod = e.ctrlKey || e.metaKey, key = e.key.toLowerCase();
       if (mod && key === 's') { e.preventDefault(); command(e.shiftKey ? 'saveas' : 'save'); return; }
@@ -1160,6 +1165,7 @@ const UI = (() => {
       if (mod || e.altKey) return;
       if (e.key === 'Escape' && schemaOpen()) { closeSchema(); return; }
       if (e.key === 'Escape') { closeMenu(); if (!Tools.escape()) select(null); return; }
+      if (e.key === 'Backspace' && Tools.undoPoint()) { e.preventDefault(); return; }   // posa binari: ultimo punto
       if (e.key === 'Delete' || e.key === 'Backspace') { e.preventDefault(); removeSelected(); return; }
       if (e.key === 'Enter') { Tools.finishPolygon(); return; }
       if (e.key === '/') { e.preventDefault(); $('#search').focus(); return; }
@@ -1167,6 +1173,7 @@ const UI = (() => {
       if (key === 'g') { $('#optGrid').click(); return; }
       if (e.key === '[') { setSide('left', !Settings.leftOpen); return; }
       if (e.key === ']') { setSide('right', !Settings.rightOpen); return; }
+      if (key === 'x' && Tools.tool === 'track') { Tools.setZigzag(!Settings.zigzag); return; }
       if (TOOLKEYS[key]) { Tools.set(TOOLKEYS[key]); return; }
       const n = parseInt(e.key, 10);
       if (n >= 1 && n <= PANELS.length) showPanel(PANELS[n - 1].id);

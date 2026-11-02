@@ -2,7 +2,8 @@
 const Settings = (() => {
   const KEY = 'panera-editor-settings';
   const s = { snap: true, link: true, grid: false, leftOpen: true, rightOpen: true, overlap: 'clip', target: 'marca', kingdom: null, simplify: 2, bgBrightness: 100, bgSaturation: 100,
-    railType: 'fermate', railColor: null };   // categoria e colore (null = primo libero) della prossima linea ferroviaria
+    railType: 'fermate', railColor: null,   // categoria e colore (null = primo libero) della prossima linea ferroviaria
+    zigzag: false };                        // Posa binari: tratti a 45° invece che orizzontali/verticali
   try { Object.assign(s, JSON.parse(localStorage.getItem(KEY)) || {}); } catch { /* preferenze di default */ }
   Object.defineProperty(s, 'save', {
     value: () => { try { localStorage.setItem(KEY, JSON.stringify(s)); } catch { /* non essenziale */ } }
@@ -411,7 +412,6 @@ const Edit = (() => {
 const Tools = (() => {
   let map, tool = 'select', drawing = null, space = false, swallow = false;
   const SNAP_PX = 14;   // distanza di aggancio (pixel), come snapDistance di Leaflet-Geoman
-  let lastDown = null;
   const FREEHAND = ['freehand', 'line', 'add', 'sub', 'redraw'];
 
   const META = {
@@ -420,6 +420,7 @@ const Tools = (() => {
     polygon:  { key: 'P', name: 'Area per punti' },
     line:     { key: 'L', name: 'Linea a mano libera (fiumi)' },
     polyline: { key: 'D', name: 'Linea per punti (DMZ, linee dritte)' },
+    track:    { key: 'T', name: 'Posa binari (linee ferroviarie)' },
     point:    { key: 'K', name: 'Punto (località o stazione)' },
     add:      { key: 'B', name: "Pennello: aggiungi all'area selezionata" },
     sub:      { key: 'E', name: "Gomma: togli dall'area selezionata" },
@@ -443,9 +444,8 @@ const Tools = (() => {
       case 'freehand': return `Tieni premuto e disegna il contorno: nuova ${kindOf('Polygon')} · Spazio + trascina per spostare la mappa · Esc per annullare`;
       case 'polygon': return `Clic per aggiungere i vertici della nuova ${kindOf('Polygon')} · clic sul primo vertice o Invio per chiudere · Esc per annullare`;
       case 'line': return `Tieni premuto e disegna il corso del fiume · Spazio + trascina per spostare la mappa`;
-      case 'polyline': if (Edit.targetKind(Settings.target, 'LineString', 'territorio') === 'linea')
-        return 'Clic su una stazione per una fermata, altrove per una curva · clic sul primo punto per chiudere una linea circolare · clic sull\'ultimo punto, doppio clic o Invio per finire · Esc per annullare';
-        return `Clic per aggiungere i punti ${dmz ? 'della DMZ' : `della linea (${kindOf('LineString', 'territorio')})`} · due clic = linea dritta · clic sull'ultimo punto o Invio per finire · Esc per annullare`;
+      case 'polyline': return `Clic per aggiungere i punti ${dmz ? 'della DMZ' : `della linea (${kindOf('LineString', 'territorio')})`} · due clic = linea dritta · clic sull'ultimo punto o Invio per finire · Esc per annullare`;
+      case 'track': return `Clic per posare il binario ${Settings.zigzag ? 'a zig-zag (45°)' : 'in orizzontale o in verticale'} · clic su una stazione = fermata · clic sul primo punto = linea circolare · clic sull'ultimo punto, doppio clic o Invio per finire · Backspace toglie l'ultimo punto · X zig-zag · Esc per annullare`;
       case 'point': return `Clic sulla mappa per posizionare la nuova ${kindOf('Point')}`;
       case 'add': return `Disegna l'area da aggiungere a ${name} · Spazio + trascina per spostare la mappa · Esc per finire`;
       case 'sub': return `Disegna l'area da togliere a ${name} · Spazio + trascina per spostare la mappa · Esc per finire`;
@@ -467,6 +467,7 @@ const Tools = (() => {
     el.classList.add('tool-' + t);
     el.classList.toggle('pe-drawing', t !== 'select');
     if (FREEHAND.includes(t)) map.dragging.disable(); else map.dragging.enable();
+    if (t === 'track') map.doubleClickZoom.disable(); else map.doubleClickZoom.enable();   // il doppio clic finisce la linea
     Render.setEditing(t === 'select');
     if (t === 'polygon') {
       map.pm.enableDraw('Polygon', {
@@ -535,10 +536,12 @@ const Tools = (() => {
 
   function cancel() {
     if (drawing) { drawing.line.remove(); drawing = null; }
+    trackClear();
   }
 
   function escape() {
     if (drawing) { cancel(); return true; }
+    if (trk.pts.length) { trackClear(); return true; }
     if (tool !== 'select') { set('select'); return true; }
     return false;
   }
@@ -559,8 +562,6 @@ const Tools = (() => {
     el.addEventListener('pointermove', e => { if (drawing) { e.stopPropagation(); move(e); } }, true);
     el.addEventListener('pointerup', e => { if (drawing) { e.stopPropagation(); finish(); } }, true);
     el.addEventListener('pointercancel', () => cancel(), true);
-    // ultimo clic sulla mappa (serve a riconoscere la chiusura di una linea circolare)
-    el.addEventListener('pointerdown', e => { lastDown = { p: map.mouseEventToContainerPoint(e), t: Date.now() }; }, true);
 
     // Spazio tenuto premuto: sposta la mappa anche mentre si disegna
     document.addEventListener('keydown', e => {
@@ -582,14 +583,7 @@ const Tools = (() => {
       const g = Geo.fromLayer(e.layer);
       e.layer.remove();
       if (e.shape === 'Line') {
-        const rail = Edit.targetKind(Settings.target, 'LineString', 'territorio') === 'linea';
-        const ok = g && g.coordinates.length >= 2;
-        // Leaflet-Geoman termina la linea quando si clicca il primo punto, ma senza aggiungerlo: se il clic che l'ha
-        // terminata era sul primo punto, è una linea circolare e il vertice di chiusura lo si aggiunge qui
-        if (rail && ok && g.coordinates.length >= 3 && lastDown && Date.now() - lastDown.t < 1000 &&
-            map.latLngToContainerPoint(Geo.ll(g.coordinates[0])).distanceTo(lastDown.p) <= SNAP_PX)
-          g.coordinates.push(g.coordinates[0].slice());
-        const id = ok && (rail ? Edit.createRailLine(g, SNAP_PX * Math.pow(2, -map.getZoom())) : Edit.createLine(Settings.target, g, 'territorio'));
+        const id = g && g.coordinates.length >= 2 && Edit.createLine(Settings.target, g, 'territorio');
         set('select');
         if (id) UI.select(id, { focus: true });
         return;
@@ -606,19 +600,130 @@ const Tools = (() => {
         const id = Edit.createPoint(Settings.target, Geo.xz(e.latlng));
         set('select');
         UI.select(id, { focus: true });
-      } else if (tool === 'select') UI.select(null);
+      } else if (tool === 'track') trackClick(e.latlng);
+      else if (tool === 'select') UI.select(null);
     });
+    map.on('mousemove', e => { if (tool === 'track') { trk.mouse = e.latlng; trackPreview(); } });
 
     set('select');
   }
 
+  // ---- Posa binari: linee ferroviarie solo orizzontali/verticali, o a 45° con lo zig-zag (docs/ferrovie.md, fase 7)
+  // pts: punti posati; mouse: ultima posizione del puntatore (per ridisegnare l'anteprima cambiando modo)
+  const trk = { pts: [], mouse: null, laid: null, next: null, cursor: null };
+  const r1 = v => Math.round(v * 10) / 10;
+  const railColor = () => Settings.railColor || Model.nextColor('linea');
+
+  // Punti da aggiungere andando dall'ultimo punto a verso p. Senza end: un tratto di blocchi interi lungo l'asse
+  // prevalente (o lungo la diagonale del quadrante, in zig-zag). Con end (p è una stazione o il primo punto): si
+  // arriva esattamente su p, con un gomito se non è allineato (orizzontale + verticale, oppure 45° + dritto).
+  function trackStep(a, p, end) {
+    const dx = p[0] - a[0], dz = p[1] - a[1], sx = dx < 0 ? -1 : 1, sz = dz < 0 ? -1 : 1;
+    const ax = Math.abs(dx), az = Math.abs(dz);
+    if (!end) {
+      if (!Settings.zigzag) return [ax >= az ? [a[0] + Math.round(dx), a[1]] : [a[0], a[1] + Math.round(dz)]];
+      const t = Math.round((ax + az) / 2);
+      return [[a[0] + sx * t, a[1] + sz * t]];
+    }
+    const e = Settings.zigzag
+      ? (ax <= az ? [p[0], r1(a[1] + sz * ax)] : [r1(a[0] + sx * az), p[1]])
+      : (ax >= az ? [p[0], a[1]] : [a[0], p[1]]);
+    return Geo.same(e, a) || Geo.same(e, p) ? [p.slice()] : [e, p.slice()];
+  }
+
+  // Dove porta il puntatore: { kind: 'last' | 'ring' | 'station' | 'free', path: punti da aggiungere, station }
+  function trackTarget(ll) {
+    const px = c => map.latLngToContainerPoint(Geo.ll(c)).distanceTo(map.latLngToContainerPoint(ll));
+    const p = Geo.xz(ll), pts = trk.pts, a = pts.at(-1);
+    const st = Store.all('stazione').map(s => ({ s, d: px(s.geometry.coordinates) }))
+      .filter(o => o.d <= SNAP_PX).sort((x, y) => x.d - y.d)[0]?.s;
+    if (!a) return { kind: 'free', path: [st ? st.geometry.coordinates.slice() : p.map(Math.round)], station: st };
+    if (px(a) <= SNAP_PX) return { kind: 'last', path: [] };
+    if (pts.length >= 2 && px(pts[0]) <= SNAP_PX) return { kind: 'ring', path: trackStep(a, pts[0], true) };
+    if (st) return { kind: 'station', path: trackStep(a, st.geometry.coordinates, true), station: st };
+    const path = trackStep(a, p, false);
+    return Geo.same(path[0], a) ? { kind: 'last', path: [] } : { kind: 'free', path };
+  }
+
+  function trackPreview() {
+    if (tool !== 'track' || !trk.mouse) return;
+    const t = trackTarget(trk.mouse), a = trk.pts.at(-1);
+    const end = t.path.at(-1) || a, lls = [a, ...t.path].filter(Boolean).map(Geo.ll);
+    const opts = { pane: 'sketch', interactive: false, pmIgnore: true, snapIgnore: true };
+    if (!trk.next) trk.next = L.polyline([], { ...opts, color: railColor(), weight: 3, dashArray: '6 6' }).addTo(map);
+    if (!trk.cursor) trk.cursor = L.circleMarker(Geo.ll(end), { ...opts, radius: 5, weight: 2, color: '#fff', fillOpacity: 1 })
+      .bindTooltip('', { permanent: true, direction: 'top', offset: [0, -8], className: 'pe-track-tip' }).addTo(map);
+    trk.next.setLatLngs(lls);
+    trk.next.setStyle({ color: railColor() });
+    trk.cursor.setLatLng(Geo.ll(end));
+    trk.cursor.setStyle({ fillColor: t.station || t.kind === 'ring' ? '#fff' : railColor() });
+    let len = 0;
+    [a, ...t.path].forEach((v, i, all) => { if (i && all[i - 1]) len += Math.hypot(v[0] - all[i - 1][0], v[1] - all[i - 1][1]); });
+    const label = t.kind === 'last' ? (trk.pts.length > 1 ? 'fine' : '') : t.kind === 'ring' ? 'chiudi l\'anello'
+      : t.station ? `«${t.station.properties.name}»` : '';
+    const tip = [a && len ? `${Math.round(len).toLocaleString('it-IT')} blocchi` : '', label].filter(Boolean).join(' · ');
+    trk.cursor.setTooltipContent(tip);
+    trk.cursor.getTooltip()?.getElement()?.classList.toggle('empty', !tip);
+  }
+
+  function trackRedraw() {
+    const lls = trk.pts.map(Geo.ll);
+    if (!trk.laid) trk.laid = L.polyline([], { pane: 'sketch', interactive: false, pmIgnore: true, snapIgnore: true, weight: 4, lineCap: 'round', lineJoin: 'round' }).addTo(map);
+    trk.laid.setLatLngs(lls);
+    trk.laid.setStyle({ color: railColor() });
+    trackPreview();
+  }
+
+  function trackClear() {
+    ['laid', 'next', 'cursor'].forEach(k => { if (trk[k]) { trk[k].remove(); trk[k] = null; } });
+    trk.pts = [];
+  }
+
+  function trackClick(ll) {
+    trk.mouse = ll;
+    const t = trackTarget(ll);
+    if (t.kind === 'last') { if (trk.pts.length >= 2) trackFinish(); return; }
+    // regola di unicità: una stazione già toccata si rifiuta subito (la chiusura dell'anello è a parte)
+    const used = t.station && trk.pts.some(v => Geo.same(v, t.station.geometry.coordinates));
+    if (used) { UI.toast(`La linea passa già da «${t.station.properties.name}»: una stazione compare una sola volta in una linea (tranne la chiusura di una linea circolare)`, 'warn'); return; }
+    if (t.kind === 'ring' && trk.pts.length + t.path.length < 4) return;   // anello degenere (andata e ritorno)
+    trk.pts.push(...t.path);
+    if (t.kind === 'ring') { trackFinish(); return; }
+    trackRedraw();
+  }
+
+  function trackFinish() {
+    const pts = trk.pts;
+    trackClear();
+    // i vertici sono già esatti (fermate, chiusura dell'anello): basta la tolleranza di Geo.same
+    const id = pts.length >= 2 && Edit.createRailLine({ type: 'LineString', coordinates: pts }, 0.05);
+    set('select');
+    if (id) UI.select(id, { focus: true });
+  }
+
+  // Backspace durante la posa: toglie l'ultimo punto
+  function undoPoint() {
+    if (tool !== 'track' || !trk.pts.length) return false;
+    trk.pts.pop();
+    trackRedraw();
+    return true;
+  }
+
+  // Zig-zag acceso o spento (anche a metà linea): ridisegna l'anteprima e il suggerimento
+  function setZigzag(on) {
+    Settings.zigzag = on; Settings.save();
+    trackPreview();
+    UI.onTool(tool);
+  }
+
   // Invio: chiude l'area o termina la linea che si sta disegnando per punti
   function finishPolygon() {
+    if (tool === 'track') { if (trk.pts.length >= 2) trackFinish(); return; }
     try {
       if (tool === 'polygon') map.pm.Draw.Polygon._finishShape();
       else if (tool === 'polyline') map.pm.Draw.Line._finishShape();
     } catch { /* troppo pochi punti */ }
   }
 
-  return { init, set, escape, hint, finishPolygon, META, get tool() { return tool; } };
+  return { init, set, escape, hint, finishPolygon, undoPoint, setZigzag, META, get tool() { return tool; } };
 })();

@@ -1,7 +1,7 @@
 # Rete ferroviaria (The Railway Company)
 
 Piano per aggiungere all'editor la rete ferroviaria di Panera, gestita da Davide (The Railway Company).
-Stato: **piano completato** (01/11/2026): fasi 1–6 realizzate. Le nuove
+Stato: fasi 1–6 realizzate (01/11/2026); fase 7 (strumento *Posa binari*) aggiunta il 02/11/2026. Le nuove
 funzioni di [new_features.md](new_features.md) hanno già preparato alcuni pezzi: vedi sotto.
 
 ## Obiettivo
@@ -37,7 +37,7 @@ restando alla `version: 1`.
 | Pannello | **un solo pannello "Ferrovie"** (icona del treno) con due sezioni, *Linee* e *Stazioni*: va adattata la logica attuale "un pannello per tipo", compresi i tasti 1–9 |
 | Creare una stazione | **strumento Punto (K)**: crea una stazione se **Crea** è su *Stazione*, altrimenti una località |
 | Menu Crea | segue lo strumento attivo e propone **solo i tipi compatibili**: con Punto solo *Località* e *Stazione*; con le linee solo i tipi che accettano linee; con le aree solo quelli che accettano aree |
-| Tracciare una linea | **strumento Linea per punti (D)** con **Crea** su *Linea ferroviaria*: in quel caso si applicano le regole ferroviarie (fermate, anello, stazioni ai capolinea). "+ Nuova linea" nel pannello lo attiva già impostato |
+| Tracciare una linea | ~~strumento Linea per punti (D) con **Crea** su *Linea ferroviaria*~~ → sostituito dallo strumento **Posa binari (T)**, solo orizzontale/verticale o a zig-zag: vedi la [fase 7](#fase-7-strumento-posa-binari-) |
 | Aspetto delle stazioni | **cerchi con il nome accanto, come le località**: stessa etichetta (posizione del nome a destra / sinistra / sopra / sotto con `label.anchor`, dimensione, "Mostra il nome") e stesso comportamento allo zoom; interscambi bianchi con il bordo nero |
 | Nome delle linee sulla mappa | **mostrato**, lungo il tracciato come per fiumi e DMZ (ripetizioni automatiche o da 1 a 10 con *Ripetizioni del nome*, dimensione, rotazione); si nasconde con **"Mostra il nome sulla mappa"** come per tutte le etichette |
 | Categoria delle linee | **`subtype`** (`direttissima` · `fermate`) con il meccanismo esistente: menu Categoria nell'ispettore e gruppi nel pannello già pronti; default in `Model.fitProps` |
@@ -138,7 +138,8 @@ facoltativo).
   scelto non è compatibile si passa al primo compatibile. Vale anche per gli strumenti esistenti.
 - **Aggancio alle stazioni**: oggi tutti i punti sono creati con `snapIgnore: true` (`makeLabel` in
   [render.js](../viewer/js/render.js)), quindi Leaflet-Geoman non li aggancerebbe: per le stazioni va tolto.
-- **Strumento Linea = Linea per punti (D)** con **Crea** su *Linea ferroviaria*. Esiste già: disegno per punti di
+- **Strumento Linea = Linea per punti (D)** con **Crea** su *Linea ferroviaria* (superato dalla fase 7: ora si usa
+  *Posa binari*). Esiste già: disegno per punti di
   Leaflet-Geoman, aggancio, Invio per finire (`finishPolygon`), creazione con `Edit.createLine(want, g, fallback)`.
   Da aggiungere, solo quando si crea una `linea`, le regole qui sotto (fermate, chiusura dell'anello, stazioni
   automatiche ai capolinea).
@@ -314,6 +315,41 @@ Wolff, programmazione lineare intera); qui non serve, ma è utile se le euristic
   - Lo schema si ricalcola a ogni modifica dello Store mentre è aperto (spostamenti salvati, Ctrl+Z).
 - Non fatto: posizione dei nomi scelta a mano (oggi automatica, tra 8 posizioni).
 
+### Fase 7: strumento Posa binari ✔
+
+Richiesta del 02/11/2026: in Minecraft i binari si posano lungo gli assi, non in obliquo, quindi le linee ferroviarie
+non si tracciano più con *Linea per punti* (che resta per fiumi, canali e DMZ) ma con uno strumento apposito.
+
+| Tema | Decisione |
+|---|---|
+| Strumento | **Posa binari (T)**, icona propria nella barra in alto; crea sempre una *Linea ferroviaria* (il menu Crea propone solo quella). "+ Nuova linea" nel pannello Ferrovie lo attiva |
+| Modo normale | ogni clic aggiunge un tratto **orizzontale o verticale**: il punto segue il puntatore lungo l'asse prevalente (Est–Ovest o Nord–Sud) |
+| Modo **Zig-zag** | interruttore nella barra (tasto X), attivo solo con lo strumento: il tratto va **a 45°** nel quadrante del puntatore (un blocco di lato, uno in basso… in tutte e quattro le direzioni diagonali). Spento, si torna a orizzontale/verticale. Si può cambiare anche a metà linea; la scelta è ricordata |
+| Stazioni | un clic su (o vicino a) una stazione fa arrivare il binario **esattamente** sulla stazione: se non è allineata, si aggiunge da solo un gomito (orizzontale + verticale, oppure 45° + dritto in zig-zag) |
+| Coordinate | i tratti hanno lunghezze in blocchi interi: i punti restano allineati anche partendo da una stazione con coordinate decimali |
+| Fine e anello | come prima: clic sull'ultimo punto, doppio clic o Invio = fine; clic sul primo punto = linea circolare; Esc annulla; **Backspace** toglie l'ultimo punto |
+| Formato | invariato: un tratto a zig-zag si salva come un segmento a 45° (due vertici), non come scaletta di blocchi. La sua lunghezza (distanze, percorso più breve) è quella in diagonale, cioè il percorso del carrello |
+| Modifica | trascinare vertici e stazioni resta libero (servirebbe a poco vincolarlo: spostare una stazione inclinerebbe comunque i tratti che ci arrivano); l'ispettore della linea **avvisa** se ci sono tratti che non sono né orizzontali/verticali né a 45° |
+
+Realizzazione:
+- [tools.js](../viewer/js/tools.js): strumento `track` con disegno proprio (non Leaflet-Geoman): anteprima nel pane
+  `sketch` con i tratti posati, il tratto in corso tratteggiato e la sua lunghezza accanto al puntatore; aggancio alle
+  stazioni entro 14 px (sempre attivo, indipendente da *Aggancio*); alla fine `Edit.createRailLine` con le regole
+  di sempre (stazioni ai capolinea, anello, unicità), con tolleranza minima perché i vertici sono già esatti. Una
+  stazione già toccata dalla linea si rifiuta al clic, con l'avviso dell'unicità. Tolto da `pm:create` il ramo delle
+  linee ferroviarie con *Linea per punti*.
+- `Settings.zigzag`; pulsante `#optZigzag` in [index.html](../viewer/index.html), icona `track` e `zigzag` in
+  [icons.js](../viewer/js/icons.js); `TOOL_TARGET` in [ui.js](../viewer/js/ui.js) con l'elenco esplicito dei tipi
+  (Linea ferroviaria solo con Posa binari, esclusa da Linea a mano libera e per punti).
+- [rail.js](../viewer/js/rail.js): `Rail.oblique` conta i tratti fuori da 0°/45°/90° e `lineInfo` lo segnala negli avvisi.
+
+Da verificare con Davide:
+- la **lunghezza dei tratti a zig-zag**: oggi è la diagonale (es. 10 blocchi a est + 10 a sud = 14,1 blocchi); se
+  preferisce contare i binari posati (20) basta cambiare la misura dei tratti a 45°;
+- se servono tratti diagonali con pendenze diverse da 1:1 (per esempio due blocchi di lato e uno in basso): oggi no.
+
+Non fatto: disegno a scaletta dei tratti a zig-zag agli zoom molto alti (oggi sono una linea a 45°).
+
 ## File coinvolti
 
 | File | Fasi |
@@ -321,7 +357,7 @@ Wolff, programmazione lineare intera); qui non serve, ma è utile se le euristic
 | [viewer/js/model.js](../viewer/js/model.js): `KINDS`, `KIND_ORDER`, `make`, `normalize`, `Store.load` | 1 |
 | [viewer/js/io.js](../viewer/js/io.js): controllo della versione del file | 1 |
 | [viewer/js/geo.js](../viewer/js/geo.js): `countVertices` per le LineString chiuse, `nearestOnLine` | 1, 2 |
-| [viewer/js/tools.js](../viewer/js/tools.js): strumenti Stazione e Linea, operazioni in `Edit` | 1, 2 |
+| [viewer/js/tools.js](../viewer/js/tools.js): strumenti Stazione, Linea e Posa binari, operazioni in `Edit` | 1, 2, 7 |
 | [viewer/js/render.js](../viewer/js/render.js): stile di linee e stazioni, evidenziazione del percorso | 1, 3, 4 |
 | [viewer/js/ui.js](../viewer/js/ui.js): pannello, ispettori, calcolatore di percorso, esportazione | 1, 3, 4, 5 |
 | [viewer/js/icons.js](../viewer/js/icons.js), [viewer/index.html](../viewer/index.html), [viewer/css/editor.css](../viewer/css/editor.css) | 1, 4, 5 |

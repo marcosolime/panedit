@@ -191,7 +191,10 @@ kbd { font: 11px/1 var(--ui); padding: 3px 5px; border-radius: 4px; background: 
 .leaflet-tile { image-rendering: pixelated; }
 .leaflet-pane > svg { pointer-events: none; }
 .leaflet-container.tool-freehand, .leaflet-container.tool-line, .leaflet-container.tool-add,
-.leaflet-container.tool-sub, .leaflet-container.tool-redraw, .leaflet-container.tool-point { cursor: crosshair; }
+.leaflet-container.tool-sub, .leaflet-container.tool-redraw, .leaflet-container.tool-point, .leaflet-container.tool-track { cursor: crosshair; }
+.leaflet-tooltip.pe-track-tip { padding: 3px 7px; border: 1px solid var(--line-2); border-radius: 6px; background: rgba(13, 17, 23, .92); color: var(--text); font: 600 12px/1.2 var(--ui); box-shadow: none; }
+.leaflet-tooltip.pe-track-tip::before { display: none; }
+.leaflet-tooltip.pe-track-tip.empty { display: none; }
 .leaflet-container.pe-panning { cursor: grab; }
 .pe-drawing .leaflet-pane path.leaflet-interactive,
 .pe-drawing .pe-label.leaflet-interactive { pointer-events: none !important; }
@@ -215,6 +218,7 @@ kbd { font: 11px/1 var(--ui); padding: 3px 5px; border-radius: 4px; background: 
 .tg svg { width: 15px; height: 15px; }
 .tg.on { color: var(--text); border-color: var(--line-2); background: var(--surface-3); }
 .tg.on svg { color: var(--accent); }
+.tg[hidden] { display: none; }
 
 #hint { position: absolute; z-index: 1000; left: 250px; right: 60px; bottom: 14px; width: fit-content; margin: 0 auto; max-width: min(760px, calc(100% - 310px)); padding: 7px 14px; border-radius: 18px; background: rgba(13, 17, 23, .86); color: var(--muted); font-size: 12px; text-align: center; pointer-events: none; border: 1px solid var(--line); }
 #hint:empty { display: none; }
