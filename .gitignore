@@ -1,4 +1,4 @@
-# Render di uNmINeD (≈730 MB, 47k file): si distribuisce a parte come zip,
+# Render di uNmINeD (≈185k file; vedi docs/mappa.md): si distribuisce a parte come zip,
 # da estrarre nella radice del progetto senza rinominare la cartella.
 render_*/
 *.zip

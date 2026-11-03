@@ -1,5 +1,8 @@
-// Mappa base: tiles generate da uNmINeD (cartella del render accanto a viewer/).
-const RENDER = 'render_zoomin1_zoomout6_webp-lossless_shadows-false';
+// Mappa base: tiles generate da uNmINeD (cartella del render accanto a viewer/; vedi docs/mappa.md).
+const RENDER = 'render_2026-11-03_z2_noluci';
+// Ingrandimento massimo dell'editor (zoom 4 = 16 px per blocco), indipendente dal render: oltre il livello nativo
+// più dettagliato del render (unmined.map.properties.js, maxZoom) Leaflet ingrandisce le tile di quel livello.
+const MAX_ZOOM = 4;
 
 const Basemap = (() => {
   const loadScript = src => new Promise((ok, ko) => {
@@ -59,7 +62,7 @@ const Basemap = (() => {
     const map = L.map(el, {
       crs: L.CRS.Simple,
       minZoom: P.minZoom,
-      maxZoom: P.maxZoom + 3,          // oltre il livello nativo Leaflet ingrandisce le tile
+      maxZoom: Math.max(MAX_ZOOM, P.maxZoom),
       zoomSnap: 0.5,
       zoomDelta: 0.5,
       wheelPxPerZoomLevel: 90,
@@ -72,9 +75,9 @@ const Basemap = (() => {
     new UnminedLayer('', {
       tileSize: 256,
       minNativeZoom: P.minZoom,
-      maxNativeZoom: P.maxZoom,
+      maxNativeZoom: P.maxZoom,      // oltre questo livello si ingrandiscono le sue tile
       minZoom: P.minZoom,
-      maxZoom: P.maxZoom + 3,
+      maxZoom: Math.max(MAX_ZOOM, P.maxZoom),
       noWrap: true,
       pmIgnore: true
     }).addTo(map);

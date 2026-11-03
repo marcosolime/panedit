@@ -28,7 +28,7 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
 
 | Percorso | Contenuto |
 |---|---|
-| `render_…/` | tiles di uNmINeD (la cartella usata è indicata in `viewer/js/basemap.js`) |
+| `render_…/` | tiles di uNmINeD (la cartella usata è indicata in `viewer/js/basemap.js`; vedi `docs/mappa.md`) |
 | `viewer/` | l'editor (`index.html`, `css/`, `js/`, librerie in `lib/`, tutto in locale) |
 | `data/` | le mappe GeoJSON (vedi sotto per i nomi dei file) |
 
