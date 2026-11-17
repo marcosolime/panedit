@@ -80,8 +80,8 @@ Aprendo direttamente `viewer/index.html` dal disco l'editor funziona lo stesso.
   Il risultato si aggiorna da solo se si modifica la rete; × lo toglie.
 
   **Schema della rete**: dal pannello Ferrovie, *Schema della rete (SVG / PDF)* apre lo schema "metropolitana"
-  (linee a 0°, 45° e 90°, disposizione automatica a partire dalle posizioni reali, linee affiancate sui tratti
-  comuni, interscambi come cerchi bianchi bordati di nero, legenda divisa per categoria). **Esporta SVG** scarica
+  (linee a 0°, 45° e 90°, disposizione automatica a partire dalle posizioni reali, linee affiancate dove corrono
+  insieme, interscambi come cerchi bianchi bordati di nero; solo la rete, senza legenda delle linee). **Esporta SVG** scarica
   il file (rifinibile in Inkscape); **Esporta PDF** apre la stampa del browser su un foglio A3 orizzontale: scegli
   *Salva come PDF*. Esc chiude lo schema.
   Lo schema si **ritocca a mano**: si trascinano le stazioni (aggancio alla griglia e agli allineamenti a 0°, 45° e

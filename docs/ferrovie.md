@@ -261,11 +261,22 @@ una linea circolare in cui conviene il verso "all'indietro".
   cella libera più vicina.
 - *Tracciati* (`octiPath`): ogni tratto è dritto se già a 0°/45°/90°, altrimenti ha **una sola curva** (diagonale +
   dritto): l'ottilinearità è garantita anche quando la disposizione non riesce ad allineare due stazioni, e gli
-  anelli restano poligoni chiusi. Le linee che condividono un tratto sono affiancate (`offset`, 8 px).
+  anelli restano poligoni chiusi.
+- *Corsie* (`lanes`, `joinLanes`; rivisto il 17/11/2026): come negli schemi delle metropolitane, il tracciato di
+  ogni linea si scompone in passi di una cella (dritti o diagonali) e le linee che percorrono lo stesso passo sono
+  **affiancate**, ognuna nella sua corsia (9 px di distanza), sempre nello stesso ordine, così non si scambiano di
+  posto lungo un corridoio. Vale anche per linee che non fermano nelle stesse stazioni: una direttissima che salta
+  delle fermate corre accanto alla linea che le fa, due linee che partono insieme verso stazioni diverse restano
+  affiancate finché non si separano. Dove una linea entra o esce da un corridoio le altre cambiano corsia con un
+  raccordo a 45°. I pallini delle fermate stanno sulla corsia della loro linea; gli interscambi coprono solo le
+  corsie delle linee che ci fermano (una direttissima che passa senza fermarsi non li allarga e gli corre accanto; se
+  però la sua corsia capita in mezzo a due linee che fermano, passa sotto il cerchio). (Prima si affiancavano solo le
+  linee con le stesse due fermate consecutive.)
 - *Disegno*: linee spesse con angoli arrotondati (direttissime più spesse), fermate come pallini bordati del colore
   della linea, interscambi come cerchi bianchi bordati di nero (più larghi se ci passano linee affiancate), nomi
   orizzontali in una delle 8 posizioni attorno alla stazione scelta per coprire meno linee, cerchi e altri nomi (negli
-  anelli preferibilmente all'esterno), titolo e legenda per categoria.
+  anelli preferibilmente all'esterno), titolo e sottotitolo. **Senza legenda** (dal 17/11/2026): lo schema mostra solo
+  la rete, non l'elenco delle linee.
 - *Esportazione* ([ui.js](../viewer/js/ui.js), `openSchema`): anteprima a tutto schermo; *Esporta SVG* scarica
   `panera_ferrovie_AAAA-MM-GG.svg`; *Esporta PDF* usa la stampa del browser con un foglio di stile `@media print`
   (A3 orizzontale, solo lo schema). Nessuna libreria.
@@ -282,7 +293,7 @@ una linea circolare in cui conviene il verso "all'indietro".
 - Gli anelli devono restare poligoni chiusi con lati a 0°, 45° e 90°, senza incrociarsi; i nomi delle loro
   stazioni vanno all'esterno.
 - **Disegno in SVG**: linee spesse colorate con angoli arrotondati, fermate come trattini o pallini, interscambi
-  come cerchi bianchi bordati, nomi a 0° o 45°, legenda divisa per categoria.
+  come cerchi bianchi bordati, nomi a 0° o 45° (la legenda per categoria, prevista all'inizio, è stata poi tolta).
 - **Esportazione**:
   - "Esporta SVG", rifinibile in Inkscape;
   - "Esporta PDF" con la stampa del browser e un foglio di stile dedicato, senza librerie. Se servirà un pulsante
