@@ -265,13 +265,23 @@ const Schema = (() => {
     paths.forEach(p => p.pts.forEach(([x, y]) => { xs.push(x); ys.push(y); }));
     marks.forEach(m => { xs.push(m.cx - m.r, m.cx + m.r); ys.push(m.cy - m.r, m.cy + m.r); });
     placed.forEach(([x, y, w, h]) => { xs.push(x, x + w); ys.push(y, y + h); });
-    const M = 40, minX = Math.min(...xs) - M, maxX = Math.max(...xs) + M, top = Math.min(...ys) - M - 46, bottom = Math.max(...ys) + M;
-    const height = bottom - top, width = Math.max(maxX - minX, 320);
-
     const day = new Date().toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+    const title = 'Sistema Unico di Panera', author = 'ad opera della Railway Company';
+    const M = 40, minX = Math.min(...xs) - M, maxX = Math.max(...xs) + M, top = Math.min(...ys) - M - 66, bottom = Math.max(...ys) + M;
+    // intestazione in alto al centro: icona del pannello Ferrovie, alta quanto le tre righe, e il testo alla sua destra.
+    // Per centrarla serve la larghezza vera del testo, misurata con lo stesso font dello schema.
+    const IC = 56, GAP = 14;
+    const ctx = document.createElement('canvas').getContext('2d');
+    const tw = (t, font) => { ctx.font = `${font} Inter, 'Segoe UI', Arial, sans-serif`; return ctx.measureText(t).width; };
+    const head = IC + GAP + Math.max(tw(title, '800 22px'), tw(author, '600 15px'), tw(day, '12px'));
+    // se l'intestazione è più larga della rete, lo schema si allarga da entrambi i lati e la rete resta al centro
+    const height = bottom - top, width = Math.max(maxX - minX, 320, head + 2 * M);
+    const left = minX - (width - (maxX - minX)) / 2, hx = left + (width - head) / 2, tx = hx + IC + GAP;
+
     const f = v => Math.round(v * 10) / 10;
     const d = pts => 'M' + pts.map(([x, y]) => `${f(x)},${f(y)}`).join(' L');
-    const box = [minX, top, width, height], [bx, by, bw, bh] = opts.box || box;
+    const icon = ICONS.ferrovia.replace(/<svg class="ic"/, `<svg x="${f(hx)}" y="${f(top + 13)}" width="${IC}" height="${IC}" color="#14181f"`);
+    const box = [left, top, width, height], [bx, by, bw, bh] = opts.box || box;
     const hit = m => opts.edit ? ` data-id="${esc(m.n.id)}"` : '';
     const ring = m => opts.edit && m.n.fixed
       ? `\n    <circle cx="${f(m.cx)}" cy="${f(m.cy)}" r="${f(m.r + 5)}" fill="none" stroke="#e0b84f" stroke-width="2" stroke-dasharray="3 3"/>` : '';
@@ -279,11 +289,13 @@ const Schema = (() => {
   <style>
     text { font-family: Inter, 'Segoe UI', Arial, sans-serif; fill: #14181f; }
     .st { font-size: ${FS}px; font-weight: 600; paint-order: stroke; stroke: #fff; stroke-width: 3px; stroke-linejoin: round; }
-    .tt { font-size: 22px; font-weight: 800; } .sub { font-size: 12px; fill: #5b6470; }
+    .tt { font-size: 22px; font-weight: 800; } .by { font-size: 15px; font-weight: 600; } .sub { font-size: 12px; fill: #5b6470; }
   </style>
   <rect x="${f(bx)}" y="${f(by)}" width="${f(bw)}" height="${f(bh)}" fill="#fff"/>
-  <text x="${f(minX + M)}" y="${f(top + 30)}" class="tt">Rete ferroviaria di Panera</text>
-  <text x="${f(minX + M)}" y="${f(top + 48)}" class="sub">The Railway Company · ${esc(day)}</text>
+  ${icon}
+  <text x="${f(tx)}" y="${f(top + 30)}" class="tt">${esc(title)}</text>
+  <text x="${f(tx)}" y="${f(top + 50)}" class="by">${esc(author)}</text>
+  <text x="${f(tx)}" y="${f(top + 68)}" class="sub">${esc(day)}</text>
   <g fill="none" stroke-linecap="round" stroke-linejoin="round">
 ${paths.map(p => `    <path d="${d(p.pts)}" stroke="${p.l.color}" stroke-width="${p.l.direct ? LW_DIRECT : LW}"/>`).join('\n')}
   </g>
